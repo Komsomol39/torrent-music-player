@@ -3,8 +3,6 @@ name: Build APK
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -20,31 +18,41 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Make gradlew executable
-        run: chmod +x gradlew
+      - name: Install Gradle 8.6
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.6-bin.zip -O /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /opt/gradle
+          echo "/opt/gradle/gradle-8.6/bin" >> $GITHUB_PATH
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/caches
+          key: gradle-${{ hashFiles('**/*.gradle*', '**/libs.versions.toml') }}
 
       - name: Build debug APK
-        run: ./gradlew assembleDebug --stacktrace
+        run: gradle assembleDebug --stacktrace --no-daemon
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: TorrentMusicPlayer-debug-${{ github.run_number }}
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
 
-      - name: APK info
+      - name: Show result
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
           if [ -f "$APK" ]; then
-            echo "✅ APK built successfully"
-            echo "Size: $(du -sh $APK | cut -f1)"
+            echo "✅ SUCCESS — APK size: $(du -sh $APK | cut -f1)"
+            echo "Download from Actions → Artifacts tab"
+          else
+            echo "❌ APK not found"
+            find app/build -name "*.apk" 2>/dev/null || echo "No APKs anywhere"
           fi
