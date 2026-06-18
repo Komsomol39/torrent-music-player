@@ -1,7 +1,9 @@
 e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/build.gradle.kts:79:47: Expecting ','
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/build.gradle.kts:79:5: None of the following functions can be called with the arguments supplied: 
+e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/build.gradle.kts:79:53: Expecting an element
+e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/build.gradle.kts:79:50: Unresolved reference: bit
+e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/build.gradle.kts:79:50: Unsupported [literal prefixes and suffixes]
 * Exception is:
-ScriptCompilationException(scriptCompilationErrors=[ScriptCompilationError(message=Expecting ',', location=/home/runner/.gradle/.tmp/gradle-kotlin-dsl-1129824549779621043.tmp/build.gradle.kts (79:47)), ScriptCompilationError(message=None of the following functions can be called with the arguments supplied: 
+ScriptCompilationException(scriptCompilationErrors=[ScriptCompilationError(message=Expecting ',', location=/home/runner/.gradle/.tmp/gradle-kotlin-dsl-6014233209238927615.tmp/build.gradle.kts (79:47)), ScriptCompilationError(message=Expecting an element, location=/home/runner/.gradle/.tmp/gradle-kotlin-dsl-6014233209238927615.tmp/build.gradle.kts (79:53)), ScriptCompilationError(message=Unresolved reference: bit, location=/home/runner/.gradle/.tmp/gradle-kotlin-dsl-6014233209238927615.tmp/build.gradle.kts (79:50)), ScriptCompilationError(message=Unsupported [literal prefixes and suffixes], location=/home/runner/.gradle/.tmp/gradle-kotlin-dsl-6014233209238927615.tmp/build.gradle.kts (79:50))])
 * Exception is:
-ScriptCompilationException(scriptCompilationErrors=[ScriptCompilationError(message=Expecting ',', location=/home/runner/.gradle/.tmp/gradle-kotlin-dsl-1129824549779621043.tmp/build.gradle.kts (79:47)), ScriptCompilationError(message=None of the following functions can be called with the arguments supplied: 
-BUILD FAILED in 58s
+ScriptCompilationException(scriptCompilationErrors=[ScriptCompilationError(message=Expecting ',', location=/home/runner/.gradle/.tmp/gradle-kotlin-dsl-6014233209238927615.tmp/build.gradle.kts (79:47)), ScriptCompilationError(message=Expecting an element, location=/home/runner/.gradle/.tmp/gradle-kotlin-dsl-6014233209238927615.tmp/build.gradle.kts (79:53)), ScriptCompilationError(message=Unresolved reference: bit, location=/home/runner/.gradle/.tmp/gradle-kotlin-dsl-6014233209238927615.tmp/build.gradle.kts (79:50)), ScriptCompilationError(message=Unsupported [literal prefixes and suffixes], location=/home/runner/.gradle/.tmp/gradle-kotlin-dsl-6014233209238927615.tmp/build.gradle.kts (79:50))])
+BUILD FAILED in 55s
