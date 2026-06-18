@@ -9,13 +9,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.libtorrent4j.AlertListener
 import org.libtorrent4j.SessionManager
-import org.libtorrent4j.SessionParams
+import org.libtorrent4j.Sha1Hash
 import org.libtorrent4j.TorrentHandle
-import org.libtorrent4j.TorrentInfo
 import org.libtorrent4j.alerts.Alert
 import org.libtorrent4j.alerts.AlertType
-import org.libtorrent4j.alerts.TorrentFinishedAlert
 import org.libtorrent4j.alerts.TorrentErrorAlert
+import org.libtorrent4j.alerts.TorrentFinishedAlert
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -49,7 +48,7 @@ class TorrentEngine @Inject constructor(
                         val h = a.handle()
                         if (!h.isValid) return
                         val hash = h.infoHash().toString()
-                        val name = h.name()
+                        val name = h.name  // property, not method in 2.1.x
                         Log.i(TAG, "Download complete: $name")
                         updateState(hash) { it.copy(
                             progress = 1f,
@@ -62,23 +61,19 @@ class TorrentEngine @Inject constructor(
                         val h = a.handle()
                         if (!h.isValid) return
                         val hash = h.infoHash().toString()
-                        val msg = a.error().message()
+                        val msg = a.error().getMessage()
                         Log.e(TAG, "Torrent error: $msg")
                         updateState(hash) { it.copy(status = DownloadStatus.ERROR, error = msg) }
                     }
-                    else -> {
-                        // Update progress for all active downloads periodically
-                        if (alert.type() == AlertType.BLOCK_FINISHED ||
-                            alert.type() == AlertType.PIECE_FINISHED) {
-                            updateAllProgress()
-                        }
-                    }
+                    AlertType.BLOCK_FINISHED,
+                    AlertType.PIECE_FINISHED -> updateAllProgress()
+                    else -> {}
                 }
             }
         })
 
         session.start()
-        Log.i(TAG, "libtorrent session started")
+        Log.i(TAG, "libtorrent session started, DHT: ${session.isDhtRunning}")
     }
 
     fun download(magnetLink: String, id: String) {
@@ -89,7 +84,6 @@ class TorrentEngine @Inject constructor(
         }
 
         try {
-            // SessionManager.download(magnet, savePath)
             session.download(magnetLink, downloadDir)
             Log.i(TAG, "Started download id=$id")
         } catch (e: Exception) {
@@ -109,10 +103,7 @@ class TorrentEngine @Inject constructor(
     }
 
     fun remove(id: String, deleteFiles: Boolean = false) {
-        findHandle(id)?.let { h ->
-            if (deleteFiles) session.remove(h)
-            else session.remove(h)
-        }
+        findHandle(id)?.let { session.remove(it) }
         _downloads.value = _downloads.value - id
     }
 
@@ -122,7 +113,9 @@ class TorrentEngine @Inject constructor(
     }
 
     private fun findHandle(id: String): TorrentHandle? {
-        return session.find(org.libtorrent4j.Sha1Hash(id))
+        return try {
+            session.find(Sha1Hash.parseHex(id))
+        } catch (e: Exception) { null }
     }
 
     private fun updateAllProgress() {
@@ -130,12 +123,12 @@ class TorrentEngine @Inject constructor(
             if (state.status != DownloadStatus.DOWNLOADING) continue
             val h = findHandle(id) ?: continue
             if (!h.isValid) continue
-            val status = h.status()
+            val s = h.status()
             updateState(id) { it.copy(
-                progress = status.progress(),
-                downloadRateBps = status.downloadPayloadRate().toLong(),
-                seeds = status.numSeeds(),
-                peers = status.numPeers()
+                progress = s.progress(),
+                downloadRateBps = s.downloadPayloadRate().toLong(),
+                seeds = s.numSeeds(),
+                peers = s.numPeers()
             )}
         }
     }
