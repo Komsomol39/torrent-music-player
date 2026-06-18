@@ -12,6 +12,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
 @Module
@@ -26,6 +28,13 @@ object AppModule {
 
     @Provides fun provideTrackDao(db: MusicDatabase) = db.trackDao()
     @Provides fun providePlaylistDao(db: MusicDatabase) = db.playlistDao()
+
+    @Provides @Singleton
+    fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .followRedirects(true)
+        .build()
 
     @Provides @Singleton
     fun provideExoPlayer(@ApplicationContext context: Context): ExoPlayer =
