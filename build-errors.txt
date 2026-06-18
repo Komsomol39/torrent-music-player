@@ -5,8 +5,8 @@ org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:che
 Caused by: org.gradle.api.internal.artifacts.ivyservice.DefaultLenientConfiguration$ArtifactResolveException: Could not resolve all files for configuration ':app:debugRuntimeClasspath'.
 	at org.gradle.api.internal.artifacts.ResolveExceptionContextualizer.mapFailures(ResolveExceptionContextualizer.java:56)
 	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:36)
-Cause 1: org.gradle.internal.resolve.ModuleVersionNotFoundException: Could not find org.libtorrent4j:libtorrent4j-android-arm64:${libtorrent}.
-Cause 2: org.gradle.internal.resolve.ModuleVersionNotFoundException: Could not find org.libtorrent4j:libtorrent4j-android-arm:${libtorrent}.
-Cause 3: org.gradle.internal.resolve.ModuleVersionNotFoundException: Could not find org.libtorrent4j:libtorrent4j-android-x86:${libtorrent}.
-Cause 4: org.gradle.internal.resolve.ModuleVersionNotFoundException: Could not find org.libtorrent4j:libtorrent4j-android-x86_64:${libtorrent}.
-BUILD FAILED in 1m 4s
+Cause 1: org.gradle.internal.resolve.ModuleVersionNotFoundException: Could not find org.libtorrent4j:libtorrent4j-android-arm64:2.1.0-26.
+Cause 2: org.gradle.internal.resolve.ModuleVersionNotFoundException: Could not find org.libtorrent4j:libtorrent4j-android-arm:2.1.0-26.
+Cause 3: org.gradle.internal.resolve.ModuleVersionNotFoundException: Could not find org.libtorrent4j:libtorrent4j-android-x86:2.1.0-26.
+Cause 4: org.gradle.internal.resolve.ModuleVersionNotFoundException: Could not find org.libtorrent4j:libtorrent4j-android-x86_64:2.1.0-26.
+BUILD FAILED in 1m 8s
