@@ -72,10 +72,9 @@ dependencies {
     implementation(libs.coroutines.android)
     implementation(libs.palette)
     implementation(libs.jsoup)
-    // libtorrent4j — все ABI (строки чтобы избежать проблем с цифрами в Kotlin DSL)
-    val libtorrent = "2.1.0-26"
-    implementation("org.libtorrent4j:libtorrent4j-android-arm64:${'$'}{libtorrent}")
-    implementation("org.libtorrent4j:libtorrent4j-android-arm:${'$'}{libtorrent}")
-    implementation("org.libtorrent4j:libtorrent4j-android-x86:${'$'}{libtorrent}")
-    implementation("org.libtorrent4j:libtorrent4j-android-x86_64:${'$'}{libtorrent}")
+    // libtorrent4j — production torrent client, all ABIs
+    implementation("org.libtorrent4j:libtorrent4j-android-arm64:2.1.0-26")
+    implementation("org.libtorrent4j:libtorrent4j-android-arm:2.1.0-26")
+    implementation("org.libtorrent4j:libtorrent4j-android-x86:2.1.0-26")
+    implementation("org.libtorrent4j:libtorrent4j-android-x86_64:2.1.0-26")
 }
