@@ -36,23 +36,24 @@ jobs:
       - name: Build debug APK
         id: build
         run: |
-          gradle assembleDebug --no-daemon 2>&1 | tee build-output.txt
-          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+          gradle assembleDebug --stacktrace --no-daemon 2>&1 | tee build-output.txt
+          echo "build_exit=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
         continue-on-error: true
 
-      - name: Save build log to repo
+      - name: Save error to repo
         run: |
-          tail -100 build-output.txt > build-log.txt || echo "no output" > build-log.txt
+          # Берём последние 200 строк где обычно ошибки компилятора
+          tail -200 build-output.txt > build-log.txt
           git config user.email "ci@build.bot"
           git config user.name "Build Bot"
           git add build-log.txt
           git diff --staged --quiet || git commit -m "ci: build log #${{ github.run_number }}"
           git push
 
-      - name: Upload APK if success
-        if: steps.build.outputs.exit_code == '0'
+      - name: Upload APK
+        if: steps.build.outputs.build_exit == '0'
         uses: actions/upload-artifact@v4
         with:
           name: TorrentMusicPlayer-${{ github.run_number }}
@@ -60,5 +61,5 @@ jobs:
           retention-days: 30
 
       - name: Fail if build failed
-        if: steps.build.outputs.exit_code != '0'
+        if: steps.build.outputs.build_exit != '0'
         run: exit 1
