@@ -36,24 +36,34 @@ jobs:
       - name: Build debug APK
         id: build
         run: |
-          gradle assembleDebug --stacktrace --no-daemon 2>&1 | tee build-output.txt
-          echo "build_exit=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+          gradle assembleDebug --stacktrace --no-daemon > build-output.txt 2>&1 || true
+          # Извлекаем только ошибки компилятора и exception
+          grep -E "^e:|error:|Exception|Caused by:|FAILED|unresolved reference|None of the following candidates" build-output.txt | head -50 > build-errors.txt || true
+          # Если нет явных ошибок — берём последние 80 строк
+          if [ ! -s build-errors.txt ]; then
+            tail -80 build-output.txt > build-errors.txt
+          fi
+          cat build-errors.txt
+          # Проверяем успех
+          if grep -q "BUILD SUCCESSFUL" build-output.txt; then
+            echo "build_ok=true" >> $GITHUB_OUTPUT
+          else
+            echo "build_ok=false" >> $GITHUB_OUTPUT
+          fi
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
-        continue-on-error: true
 
-      - name: Save error to repo
+      - name: Save errors to repo
+        if: steps.build.outputs.build_ok == 'false'
         run: |
-          # Берём последние 200 строк где обычно ошибки компилятора
-          tail -200 build-output.txt > build-log.txt
           git config user.email "ci@build.bot"
           git config user.name "Build Bot"
-          git add build-log.txt
-          git diff --staged --quiet || git commit -m "ci: build log #${{ github.run_number }}"
+          git add build-errors.txt
+          git diff --staged --quiet || git commit -m "ci: build errors #${{ github.run_number }}"
           git push
 
       - name: Upload APK
-        if: steps.build.outputs.build_exit == '0'
+        if: steps.build.outputs.build_ok == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: TorrentMusicPlayer-${{ github.run_number }}
@@ -61,5 +71,7 @@ jobs:
           retention-days: 30
 
       - name: Fail if build failed
-        if: steps.build.outputs.build_exit != '0'
-        run: exit 1
+        if: steps.build.outputs.build_ok == 'false'
+        run: |
+          echo "Build failed. See build-errors.txt in repo."
+          exit 1
