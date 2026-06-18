@@ -66,7 +66,7 @@ fun TorrentSearchScreen(
                 }
             }
             results.isEmpty() && query.isNotBlank() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No results found for "$query"")
+                Text("No results found for \"$query\"")
             }
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(results, key = { it.id }) { result ->
