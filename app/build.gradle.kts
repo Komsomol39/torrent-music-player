@@ -72,9 +72,11 @@ dependencies {
     implementation(libs.coroutines.android)
     implementation(libs.palette)
     implementation(libs.jsoup)
-    // libtorrent4j — production torrent client, all ABIs
-    implementation("org.libtorrent4j:libtorrent4j-android-arm64:2.1.0-26")
-    implementation("org.libtorrent4j:libtorrent4j-android-arm:2.1.0-26")
-    implementation("org.libtorrent4j:libtorrent4j-android-x86:2.1.0-26")
-    implementation("org.libtorrent4j:libtorrent4j-android-x86_64:2.1.0-26")
+    // frostwire-jlibtorrent — production torrent client (16KB page size compatible)
+    val jlt = "2.0.13.6"
+    implementation("com.frostwire:jlibtorrent:${jlt}")
+    implementation("com.frostwire:jlibtorrent-android-arm64:${jlt}")
+    implementation("com.frostwire:jlibtorrent-android-arm:${jlt}")
+    implementation("com.frostwire:jlibtorrent-android-x86:${jlt}")
+    implementation("com.frostwire:jlibtorrent-android-x86_64:${jlt}")
 }
