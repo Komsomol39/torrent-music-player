@@ -7,9 +7,15 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import org.libtorrent4j.*
-import org.libtorrent4j.alerts.*
-import org.libtorrent4j.swig.settings_pack
+import org.libtorrent4j.AlertListener
+import org.libtorrent4j.SessionManager
+import org.libtorrent4j.SessionParams
+import org.libtorrent4j.TorrentHandle
+import org.libtorrent4j.TorrentInfo
+import org.libtorrent4j.alerts.Alert
+import org.libtorrent4j.alerts.AlertType
+import org.libtorrent4j.alerts.TorrentFinishedAlert
+import org.libtorrent4j.alerts.TorrentErrorAlert
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -22,129 +28,116 @@ class TorrentEngine @Inject constructor(
         private const val TAG = "TorrentEngine"
     }
 
-    private var session: SessionManager? = null
+    private val session = SessionManager()
     private val _downloads = MutableStateFlow<Map<String, DownloadState>>(emptyMap())
     val downloads: StateFlow<Map<String, DownloadState>> = _downloads.asStateFlow()
-
     val downloadDir: File = File(context.getExternalFilesDir(null), "Music").also { it.mkdirs() }
+    private var started = false
 
     fun start() {
-        if (session != null) return
+        if (started) return
+        started = true
         Log.i(TAG, "Starting libtorrent session")
 
-        val settings = SettingsPack().apply {
-            setString(settings_pack.string_types.user_agent.swigValue(), "MusicPlayer/1.0")
-            setInteger(settings_pack.int_types.active_downloads.swigValue(), 5)
-            setInteger(settings_pack.int_types.active_seeds.swigValue(), 5)
-            setInteger(settings_pack.int_types.connection_speed.swigValue(), 20)
-            setBoolean(settings_pack.bool_types.enable_dht.swigValue(), true)
-            setBoolean(settings_pack.bool_types.enable_upnp.swigValue(), true)
-            setBoolean(settings_pack.bool_types.enable_natpmp.swigValue(), true)
-        }
+        session.addListener(object : AlertListener {
+            override fun types(): IntArray? = null
 
-        session = SessionManager().apply {
-            addListener(object : AlertListener {
-                override fun types() = null  // слушаем все
-
-                override fun alert(alert: Alert<*>) {
-                    when (alert.type()) {
-                        AlertType.TORRENT_ADDED -> {
-                            val a = alert as TorrentAddedAlert
-                            Log.d(TAG, "Torrent added: ${a.torrentName()}")
+            override fun alert(alert: Alert<*>) {
+                when (alert.type()) {
+                    AlertType.TORRENT_FINISHED -> {
+                        val a = alert as TorrentFinishedAlert
+                        val h = a.handle()
+                        if (!h.isValid) return
+                        val hash = h.infoHash().toString()
+                        val name = h.name()
+                        Log.i(TAG, "Download complete: $name")
+                        updateState(hash) { it.copy(
+                            progress = 1f,
+                            status = DownloadStatus.COMPLETED,
+                            localPath = File(downloadDir, name).absolutePath
+                        )}
+                    }
+                    AlertType.TORRENT_ERROR -> {
+                        val a = alert as TorrentErrorAlert
+                        val h = a.handle()
+                        if (!h.isValid) return
+                        val hash = h.infoHash().toString()
+                        val msg = a.error().message()
+                        Log.e(TAG, "Torrent error: $msg")
+                        updateState(hash) { it.copy(status = DownloadStatus.ERROR, error = msg) }
+                    }
+                    else -> {
+                        // Update progress for all active downloads periodically
+                        if (alert.type() == AlertType.BLOCK_FINISHED ||
+                            alert.type() == AlertType.PIECE_FINISHED) {
+                            updateAllProgress()
                         }
-                        AlertType.BLOCK_FINISHED -> {
-                            val a = alert as BlockFinishedAlert
-                            val h = a.handle()
-                            if (h.isValid) updateProgress(h)
-                        }
-                        AlertType.TORRENT_FINISHED -> {
-                            val a = alert as TorrentFinishedAlert
-                            val h = a.handle()
-                            val infoHash = h.infoHashes().v1().toString()
-                            Log.i(TAG, "Download complete: ${h.name()}")
-                            updateState(infoHash) { it.copy(
-                                progress = 1f,
-                                status = DownloadStatus.COMPLETED,
-                                localPath = File(downloadDir, h.name()).absolutePath
-                            )}
-                        }
-                        AlertType.TORRENT_ERROR -> {
-                            val a = alert as TorrentErrorAlert
-                            Log.e(TAG, "Torrent error: ${a.error()}")
-                        }
-                        else -> {}
                     }
                 }
-            })
-            start(settings)
-        }
-        Log.i(TAG, "libtorrent session started, DHT nodes: ${session?.stats()?.dhtNodes()}")
+            }
+        })
+
+        session.start()
+        Log.i(TAG, "libtorrent session started")
     }
 
     fun download(magnetLink: String, id: String) {
-        val s = session ?: run { start(); session!! }
+        if (!started) start()
 
-        val savePath = downloadDir.absolutePath
-        val priority = Priority.DEFAULT
-
-        updateState(id) { DownloadState(
-            id = id,
-            magnetLink = magnetLink,
-            status = DownloadStatus.DOWNLOADING,
-            progress = 0f
-        )}
+        updateState(id) {
+            DownloadState(id = id, magnetLink = magnetLink, status = DownloadStatus.DOWNLOADING)
+        }
 
         try {
-            s.download(magnetLink, File(savePath))
-            Log.i(TAG, "Started download: $id")
+            // SessionManager.download(magnet, savePath)
+            session.download(magnetLink, downloadDir)
+            Log.i(TAG, "Started download id=$id")
         } catch (e: Exception) {
             Log.e(TAG, "Download error: ${e.message}")
             updateState(id) { it.copy(status = DownloadStatus.ERROR, error = e.message) }
         }
     }
 
-    fun pause(infoHash: String) {
-        session?.find(Sha1Hash(infoHash))?.pause()
-        updateState(infoHash) { it.copy(status = DownloadStatus.PAUSED) }
+    fun pause(id: String) {
+        findHandle(id)?.pause()
+        updateState(id) { it.copy(status = DownloadStatus.PAUSED) }
     }
 
-    fun resume(infoHash: String) {
-        session?.find(Sha1Hash(infoHash))?.resume()
-        updateState(infoHash) { it.copy(status = DownloadStatus.DOWNLOADING) }
+    fun resume(id: String) {
+        findHandle(id)?.resume()
+        updateState(id) { it.copy(status = DownloadStatus.DOWNLOADING) }
     }
 
-    fun remove(infoHash: String, deleteFiles: Boolean = false) {
-        session?.find(Sha1Hash(infoHash))?.let { handle ->
-            session?.remove(handle)
+    fun remove(id: String, deleteFiles: Boolean = false) {
+        findHandle(id)?.let { h ->
+            if (deleteFiles) session.remove(h)
+            else session.remove(h)
         }
-        _downloads.value = _downloads.value - infoHash
+        _downloads.value = _downloads.value - id
     }
 
     fun stop() {
-        session?.stop()
-        session = null
+        session.stop()
+        started = false
     }
 
-    private fun updateProgress(handle: TorrentHandle) {
-        val status = handle.status()
-        val infoHash = handle.infoHashes().v1().toString()
-        val progress = status.progress()
-        val downloadRate = status.downloadPayloadRate()
-        val uploadRate   = status.uploadPayloadRate()
-        val seeds  = status.numSeeds()
-        val peers  = status.numPeers()
+    private fun findHandle(id: String): TorrentHandle? {
+        return session.find(org.libtorrent4j.Sha1Hash(id))
+    }
 
-        updateState(infoHash) { it.copy(
-            progress = progress,
-            downloadRateBps = downloadRate.toLong(),
-            uploadRateBps = uploadRate.toLong(),
-            seeds = seeds,
-            peers = peers,
-            eta = if (downloadRate > 0 && progress < 1f) {
-                val remaining = (it.totalBytes * (1f - progress)).toLong()
-                remaining / downloadRate
-            } else 0L
-        )}
+    private fun updateAllProgress() {
+        for ((id, state) in _downloads.value) {
+            if (state.status != DownloadStatus.DOWNLOADING) continue
+            val h = findHandle(id) ?: continue
+            if (!h.isValid) continue
+            val status = h.status()
+            updateState(id) { it.copy(
+                progress = status.progress(),
+                downloadRateBps = status.downloadPayloadRate().toLong(),
+                seeds = status.numSeeds(),
+                peers = status.numPeers()
+            )}
+        }
     }
 
     private fun updateState(id: String, transform: (DownloadState) -> DownloadState) {
