@@ -30,9 +30,7 @@ android {
     }
 
     kotlinOptions { jvmTarget = "17" }
-
     buildFeatures { compose = true }
-
     composeOptions { kotlinCompilerExtensionVersion = "1.5.14" }
 }
 
@@ -40,8 +38,6 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime)
     implementation(libs.androidx.lifecycle.viewmodel)
-
-    // Compose
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.graphics)
@@ -50,39 +46,23 @@ dependencies {
     implementation(libs.compose.material.icons)
     implementation(libs.compose.activity)
     debugImplementation(libs.compose.ui.tooling)
-
-    // Navigation
     implementation(libs.navigation.compose)
-
-    // Media3
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
     implementation(libs.media3.session)
-
-    // Room
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
-
-    // Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
-
-    // Network
     implementation(libs.retrofit)
     implementation(libs.retrofit.gson)
+    implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
-
-    // Image
     implementation(libs.coil.compose)
-
-    // DataStore
     implementation(libs.datastore.prefs)
-
-    // Coroutines
     implementation(libs.coroutines.android)
-
-    // Palette
     implementation(libs.palette)
+    implementation(libs.jsoup)
 }
