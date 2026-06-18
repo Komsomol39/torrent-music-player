@@ -1,13 +1,7 @@
-> Task :app:kspDebugKotlin FAILED
-e: [ksp] InjectProcessingStep was unable to process 'LibraryViewModel(com.apia.musicplayer.data.db.TrackDao,error.NonExistentClass)' because 'error.NonExistentClass' could not be resolved.
-e: [ksp] InjectProcessingStep was unable to process 'PlayerViewModel(error.NonExistentClass,com.apia.musicplayer.data.db.TrackDao)' because 'error.NonExistentClass' could not be resolved.
-e: [ksp] InjectProcessingStep was unable to process 'SearchViewModel(com.apia.musicplayer.data.db.TrackDao,error.NonExistentClass)' because 'error.NonExistentClass' could not be resolved.
-e: Error occurred in KSP, check log for detail
+e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/build.gradle.kts:79:47: Expecting ','
+e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/build.gradle.kts:79:5: None of the following functions can be called with the arguments supplied: 
 * Exception is:
-org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:kspDebugKotlin'.
-	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:36)
-Caused by: org.gradle.workers.internal.DefaultWorkerExecutor$WorkExecutionException: A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
-	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:36)
-Caused by: org.jetbrains.kotlin.gradle.tasks.CompilationErrorException: Compilation error. See log for more details
-	at org.jetbrains.kotlin.gradle.tasks.TasksUtilsKt.throwExceptionIfCompilationFailed(tasksUtils.kt:20)
-BUILD FAILED in 2m 58s
+ScriptCompilationException(scriptCompilationErrors=[ScriptCompilationError(message=Expecting ',', location=/home/runner/.gradle/.tmp/gradle-kotlin-dsl-1129824549779621043.tmp/build.gradle.kts (79:47)), ScriptCompilationError(message=None of the following functions can be called with the arguments supplied: 
+* Exception is:
+ScriptCompilationException(scriptCompilationErrors=[ScriptCompilationError(message=Expecting ',', location=/home/runner/.gradle/.tmp/gradle-kotlin-dsl-1129824549779621043.tmp/build.gradle.kts (79:47)), ScriptCompilationError(message=None of the following functions can be called with the arguments supplied: 
+BUILD FAILED in 58s
