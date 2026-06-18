@@ -6,6 +6,7 @@ import androidx.media3.common.C
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.room.Room
 import com.apia.musicplayer.data.db.MusicDatabase
+import com.apia.musicplayer.player.PlayerController
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -38,4 +39,8 @@ object AppModule {
             )
             .setHandleAudioBecomingNoisy(true)
             .build()
+
+    @Provides @Singleton
+    fun providePlayerController(player: ExoPlayer): PlayerController =
+        PlayerController(player)
 }
