@@ -1,9 +1,12 @@
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/build.gradle.kts:79:47: Expecting ','
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/build.gradle.kts:79:53: Expecting an element
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/build.gradle.kts:79:50: Unresolved reference: bit
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/build.gradle.kts:79:50: Unsupported [literal prefixes and suffixes]
+> Task :app:checkDebugAarMetadata FAILED
 * Exception is:
-ScriptCompilationException(scriptCompilationErrors=[ScriptCompilationError(message=Expecting ',', location=/home/runner/.gradle/.tmp/gradle-kotlin-dsl-6014233209238927615.tmp/build.gradle.kts (79:47)), ScriptCompilationError(message=Expecting an element, location=/home/runner/.gradle/.tmp/gradle-kotlin-dsl-6014233209238927615.tmp/build.gradle.kts (79:53)), ScriptCompilationError(message=Unresolved reference: bit, location=/home/runner/.gradle/.tmp/gradle-kotlin-dsl-6014233209238927615.tmp/build.gradle.kts (79:50)), ScriptCompilationError(message=Unsupported [literal prefixes and suffixes], location=/home/runner/.gradle/.tmp/gradle-kotlin-dsl-6014233209238927615.tmp/build.gradle.kts (79:50))])
-* Exception is:
-ScriptCompilationException(scriptCompilationErrors=[ScriptCompilationError(message=Expecting ',', location=/home/runner/.gradle/.tmp/gradle-kotlin-dsl-6014233209238927615.tmp/build.gradle.kts (79:47)), ScriptCompilationError(message=Expecting an element, location=/home/runner/.gradle/.tmp/gradle-kotlin-dsl-6014233209238927615.tmp/build.gradle.kts (79:53)), ScriptCompilationError(message=Unresolved reference: bit, location=/home/runner/.gradle/.tmp/gradle-kotlin-dsl-6014233209238927615.tmp/build.gradle.kts (79:50)), ScriptCompilationError(message=Unsupported [literal prefixes and suffixes], location=/home/runner/.gradle/.tmp/gradle-kotlin-dsl-6014233209238927615.tmp/build.gradle.kts (79:50))])
-BUILD FAILED in 55s
+org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:checkDebugAarMetadata'.
+	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:38)
+Caused by: org.gradle.api.internal.artifacts.ivyservice.DefaultLenientConfiguration$ArtifactResolveException: Could not resolve all files for configuration ':app:debugRuntimeClasspath'.
+	at org.gradle.api.internal.artifacts.ResolveExceptionContextualizer.mapFailures(ResolveExceptionContextualizer.java:56)
+	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:36)
+Cause 1: org.gradle.internal.resolve.ModuleVersionNotFoundException: Could not find org.libtorrent4j:libtorrent4j-android-arm64:${libtorrent}.
+Cause 2: org.gradle.internal.resolve.ModuleVersionNotFoundException: Could not find org.libtorrent4j:libtorrent4j-android-arm:${libtorrent}.
+Cause 3: org.gradle.internal.resolve.ModuleVersionNotFoundException: Could not find org.libtorrent4j:libtorrent4j-android-x86:${libtorrent}.
+Cause 4: org.gradle.internal.resolve.ModuleVersionNotFoundException: Could not find org.libtorrent4j:libtorrent4j-android-x86_64:${libtorrent}.
+BUILD FAILED in 1m 4s
