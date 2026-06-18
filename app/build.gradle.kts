@@ -76,5 +76,5 @@ dependencies {
     implementation(libs.libtorrent.android.arm64)
     implementation(libs.libtorrent.android.arm)
     implementation(libs.libtorrent.android.x86)
-    implementation(libs.libtorrent.android.x86.64)
+    implementation(libs.libtorrent.android.x86.64bit)
 }
