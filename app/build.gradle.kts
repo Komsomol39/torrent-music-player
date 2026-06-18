@@ -15,6 +15,9 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+        }
     }
 
     buildTypes {
@@ -28,10 +31,14 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
     composeOptions { kotlinCompilerExtensionVersion = "1.5.14" }
+
+    packaging {
+        resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        jniLibs.useLegacyPackaging = true
+    }
 }
 
 dependencies {
@@ -65,4 +72,9 @@ dependencies {
     implementation(libs.coroutines.android)
     implementation(libs.palette)
     implementation(libs.jsoup)
+    // libtorrent4j — все ABI для максимальной совместимости
+    implementation(libs.libtorrent.android.arm64)
+    implementation(libs.libtorrent.android.arm)
+    implementation(libs.libtorrent.android.x86)
+    implementation(libs.libtorrent.android.x86.64)
 }
