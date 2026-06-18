@@ -7,9 +7,9 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import com.frostwire.jlibtorrent.*
-import com.frostwire.jlibtorrent.alerts.*
-import com.frostwire.jlibtorrent.swig.settings_pack
+import org.libtorrent4j.*
+import org.libtorrent4j.alerts.*
+import org.libtorrent4j.swig.settings_pack
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
