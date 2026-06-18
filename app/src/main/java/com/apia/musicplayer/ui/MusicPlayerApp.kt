@@ -8,9 +8,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.apia.musicplayer.ui.components.MiniPlayer
 import com.apia.musicplayer.ui.navigation.MusicNavGraph
 import com.apia.musicplayer.ui.navigation.Screen
-import com.apia.musicplayer.ui.components.MiniPlayer
 
 @Composable
 fun MusicPlayerApp() {
@@ -20,7 +20,6 @@ fun MusicPlayerApp() {
     Scaffold(
         bottomBar = {
             Column {
-                // Mini player above nav bar (show when not on full player screen)
                 if (currentRoute != Screen.Player.route) {
                     MiniPlayer(onClick = { navController.navigate(Screen.Player.route) })
                 }
@@ -40,8 +39,14 @@ fun MusicPlayerApp() {
                     NavigationBarItem(
                         selected = currentRoute == Screen.Torrent.route,
                         onClick = { navController.navigate(Screen.Torrent.route) },
+                        icon = { Icon(Icons.Default.TravelExplore, null) },
+                        label = { Text("Find") }
+                    )
+                    NavigationBarItem(
+                        selected = currentRoute == Screen.Downloads.route,
+                        onClick = { navController.navigate(Screen.Downloads.route) },
                         icon = { Icon(Icons.Default.Download, null) },
-                        label = { Text("Torrent") }
+                        label = { Text("Downloads") }
                     )
                 }
             }
