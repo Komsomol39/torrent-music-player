@@ -1,15 +1,8 @@
 > Task :app:compileDebugKotlin FAILED
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:51:35 Unresolved reference: TORRENT_ADDED
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:52:46 Unresolved reference: TorrentAddedAlert
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:63:46 Unresolved reference: infoHashes
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:64:64 Expression 'name' of type 'String!' cannot be invoked as a function. The function 'invoke()' is not found
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:68:65 Expression 'name' of type 'String!' cannot be invoked as a function. The function 'invoke()' is not found
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:79:19 Type mismatch: inferred type is SettingsPack but SessionParams! was expected
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:98:24 Type mismatch: inferred type is String but TorrentInfo! was expected
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:107:32 Type mismatch: inferred type is String but sha1_hash! was expected
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:112:32 Type mismatch: inferred type is String but sha1_hash! was expected
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:117:32 Type mismatch: inferred type is String but sha1_hash! was expected
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:130:31 Unresolved reference: infoHashes
+e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:52:38 Expression 'name' of type 'String!' cannot be invoked as a function. The function 'invoke()' is not found
+e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:65:45 Expression 'message' of type 'String!' cannot be invoked as a function. The function 'invoke()' is not found
+e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:93:30 Type mismatch: inferred type is String but TorrentInfo! was expected
+e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:125:55 Type mismatch: inferred type is String but sha1_hash! was expected
 * Exception is:
 org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:compileDebugKotlin'.
 	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:36)
@@ -17,4 +10,4 @@ Caused by: org.gradle.workers.internal.DefaultWorkerExecutor$WorkExecutionExcept
 	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:36)
 Caused by: org.jetbrains.kotlin.gradle.tasks.CompilationErrorException: Compilation error. See log for more details
 	at org.jetbrains.kotlin.gradle.tasks.TasksUtilsKt.throwExceptionIfCompilationFailed(tasksUtils.kt:20)
-BUILD FAILED in 3m 11s
+BUILD FAILED in 3m 12s
