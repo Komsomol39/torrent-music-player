@@ -5,8 +5,40 @@ org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:che
 Caused by: org.gradle.api.internal.artifacts.ivyservice.DefaultLenientConfiguration$ArtifactResolveException: Could not resolve all files for configuration ':app:debugRuntimeClasspath'.
 	at org.gradle.api.internal.artifacts.ResolveExceptionContextualizer.mapFailures(ResolveExceptionContextualizer.java:56)
 	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:36)
-Cause 1: org.gradle.internal.resolve.ModuleVersionNotFoundException: Could not find org.libtorrent4j:libtorrent4j-android-arm64:2.1.0-26.
-Cause 2: org.gradle.internal.resolve.ModuleVersionNotFoundException: Could not find org.libtorrent4j:libtorrent4j-android-arm:2.1.0-26.
-Cause 3: org.gradle.internal.resolve.ModuleVersionNotFoundException: Could not find org.libtorrent4j:libtorrent4j-android-x86:2.1.0-26.
-Cause 4: org.gradle.internal.resolve.ModuleVersionNotFoundException: Could not find org.libtorrent4j:libtorrent4j-android-x86_64:2.1.0-26.
-BUILD FAILED in 1m 8s
+Cause 1: org.gradle.internal.resolve.ModuleVersionResolveException: Could not resolve com.frostwire:jlibtorrent:2.0.13.6.
+Caused by: org.gradle.internal.resolve.ModuleVersionResolveException: Could not resolve com.frostwire:jlibtorrent:2.0.13.6.
+Caused by: org.gradle.api.resources.ResourceException: Could not get resource 'https://dl.frostwire.com/maven/com/frostwire/jlibtorrent/2.0.13.6/jlibtorrent-2.0.13.6.pom'.
+	at org.gradle.internal.resource.ResourceExceptions.failure(ResourceExceptions.java:74)
+	at org.gradle.internal.resource.ResourceExceptions.getFailed(ResourceExceptions.java:57)
+Caused by: org.gradle.api.internal.artifacts.repositories.InsecureProtocolException: Redirecting from secure protocol to insecure protocol, without explicit opt-in, is unsupported. 'https://dl.frostwire.com/maven' is redirecting to 'http://www.frostwire.com/downloads/?from=404'. 
+	at org.gradle.api.internal.artifacts.repositories.DefaultUrlArtifactRepository.throwExceptionDueToInsecureRedirect(DefaultUrlArtifactRepository.java:110)
+Cause 2: org.gradle.internal.resolve.ModuleVersionResolveException: Could not resolve com.frostwire:jlibtorrent-android-arm64:2.0.13.6.
+Caused by: org.gradle.internal.resolve.ModuleVersionResolveException: Could not resolve com.frostwire:jlibtorrent-android-arm64:2.0.13.6.
+Caused by: org.gradle.api.resources.ResourceException: Could not get resource 'https://dl.frostwire.com/maven/com/frostwire/jlibtorrent-android-arm64/2.0.13.6/jlibtorrent-android-arm64-2.0.13.6.pom'.
+	at org.gradle.internal.resource.ResourceExceptions.failure(ResourceExceptions.java:74)
+	at org.gradle.internal.resource.ResourceExceptions.getFailed(ResourceExceptions.java:57)
+Caused by: org.gradle.api.internal.artifacts.repositories.InsecureProtocolException: Redirecting from secure protocol to insecure protocol, without explicit opt-in, is unsupported. 'https://dl.frostwire.com/maven' is redirecting to 'http://www.frostwire.com/downloads/?from=404'. 
+	at org.gradle.api.internal.artifacts.repositories.DefaultUrlArtifactRepository.throwExceptionDueToInsecureRedirect(DefaultUrlArtifactRepository.java:110)
+Cause 3: org.gradle.internal.resolve.ModuleVersionResolveException: Could not resolve com.frostwire:jlibtorrent-android-arm:2.0.13.6.
+Caused by: org.gradle.internal.resolve.ModuleVersionResolveException: Could not resolve com.frostwire:jlibtorrent-android-arm:2.0.13.6.
+Caused by: org.gradle.api.resources.ResourceException: Could not get resource 'https://dl.frostwire.com/maven/com/frostwire/jlibtorrent-android-arm/2.0.13.6/jlibtorrent-android-arm-2.0.13.6.pom'.
+	at org.gradle.internal.resource.ResourceExceptions.failure(ResourceExceptions.java:74)
+	at org.gradle.internal.resource.ResourceExceptions.getFailed(ResourceExceptions.java:57)
+Caused by: org.gradle.api.internal.artifacts.repositories.InsecureProtocolException: Redirecting from secure protocol to insecure protocol, without explicit opt-in, is unsupported. 'https://dl.frostwire.com/maven' is redirecting to 'http://www.frostwire.com/downloads/?from=404'. 
+	at org.gradle.api.internal.artifacts.repositories.DefaultUrlArtifactRepository.throwExceptionDueToInsecureRedirect(DefaultUrlArtifactRepository.java:110)
+Cause 4: org.gradle.internal.resolve.ModuleVersionResolveException: Could not resolve com.frostwire:jlibtorrent-android-x86:2.0.13.6.
+Caused by: org.gradle.internal.resolve.ModuleVersionResolveException: Could not resolve com.frostwire:jlibtorrent-android-x86:2.0.13.6.
+Caused by: org.gradle.api.resources.ResourceException: Could not get resource 'https://dl.frostwire.com/maven/com/frostwire/jlibtorrent-android-x86/2.0.13.6/jlibtorrent-android-x86-2.0.13.6.pom'.
+	at org.gradle.internal.resource.ResourceExceptions.failure(ResourceExceptions.java:74)
+	at org.gradle.internal.resource.ResourceExceptions.getFailed(ResourceExceptions.java:57)
+	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:36)
+Caused by: org.gradle.api.internal.artifacts.repositories.InsecureProtocolException: Redirecting from secure protocol to insecure protocol, without explicit opt-in, is unsupported. 'https://dl.frostwire.com/maven' is redirecting to 'http://www.frostwire.com/downloads/?from=404'. 
+	at org.gradle.api.internal.artifacts.repositories.DefaultUrlArtifactRepository.throwExceptionDueToInsecureRedirect(DefaultUrlArtifactRepository.java:110)
+Cause 5: org.gradle.internal.resolve.ModuleVersionResolveException: Could not resolve com.frostwire:jlibtorrent-android-x86_64:2.0.13.6.
+Caused by: org.gradle.internal.resolve.ModuleVersionResolveException: Could not resolve com.frostwire:jlibtorrent-android-x86_64:2.0.13.6.
+Caused by: org.gradle.api.resources.ResourceException: Could not get resource 'https://dl.frostwire.com/maven/com/frostwire/jlibtorrent-android-x86_64/2.0.13.6/jlibtorrent-android-x86_64-2.0.13.6.pom'.
+	at org.gradle.internal.resource.ResourceExceptions.failure(ResourceExceptions.java:74)
+	at org.gradle.internal.resource.ResourceExceptions.getFailed(ResourceExceptions.java:57)
+Caused by: org.gradle.api.internal.artifacts.repositories.InsecureProtocolException: Redirecting from secure protocol to insecure protocol, without explicit opt-in, is unsupported. 'https://dl.frostwire.com/maven' is redirecting to 'http://www.frostwire.com/downloads/?from=404'. 
+	at org.gradle.api.internal.artifacts.repositories.DefaultUrlArtifactRepository.throwExceptionDueToInsecureRedirect(DefaultUrlArtifactRepository.java:110)
+BUILD FAILED in 1m 13s
