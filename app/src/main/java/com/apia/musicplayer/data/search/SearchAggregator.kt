@@ -1,10 +1,18 @@
 package com.apia.musicplayer.data.search
 
+import android.util.Log
 import com.apia.musicplayer.domain.model.SearchSource
 import com.apia.musicplayer.domain.model.TorrentResult
 import kotlinx.coroutines.*
 import javax.inject.Inject
 import javax.inject.Singleton
+
+data class SourceResult(
+    val source: SearchSource,
+    val results: List<TorrentResult> = emptyList(),
+    val error: String? = null,
+    val durationMs: Long = 0
+)
 
 @Singleton
 class SearchAggregator @Inject constructor(
@@ -52,24 +60,38 @@ class SearchAggregator @Inject constructor(
         SearchSource.FMA        -> fma
     }
 
+    /**
+     * Параллельный поиск. Возвращает SourceResult для каждого источника —
+     * включая ошибки, чтобы UI мог показать что именно не сработало.
+     */
     suspend fun searchAll(
         query: String,
         sources: Set<SearchSource> = enabledSources,
-        onPartialResult: (source: SearchSource, results: List<TorrentResult>) -> Unit
+        onResult: (SourceResult) -> Unit
     ) = coroutineScope {
+        Log.d("SearchAggregator", "Searching ${sources.size} sources for: $query")
         sources.map { source ->
-            async {
-                val provider = providerFor(source) ?: return@async
+            async(Dispatchers.IO) {
+                val t0 = System.currentTimeMillis()
+                val provider = providerFor(source)
+                if (provider == null) {
+                    onResult(SourceResult(source, error = "No provider"))
+                    return@async
+                }
                 try {
                     val results = provider.search(query)
-                    if (results.isNotEmpty()) onPartialResult(source, results)
-                } catch (e: Exception) { /* source unavailable */ }
+                    val ms = System.currentTimeMillis() - t0
+                    Log.d("SearchAggregator", "${source.name}: ${results.size} results in ${ms}ms")
+                    onResult(SourceResult(source, results, durationMs = ms))
+                } catch (e: Exception) {
+                    val ms = System.currentTimeMillis() - t0
+                    val err = e.message ?: e.javaClass.simpleName
+                    Log.w("SearchAggregator", "${source.name} failed: $err")
+                    onResult(SourceResult(source, error = err, durationMs = ms))
+                }
             }
         }.awaitAll()
     }
-
-    suspend fun search(query: String, source: SearchSource): List<TorrentResult> =
-        providerFor(source)?.search(query) ?: emptyList()
 
     suspend fun getMagnet(result: TorrentResult, source: SearchSource): String =
         providerFor(source)?.getMagnet(result) ?: result.magnetLink
