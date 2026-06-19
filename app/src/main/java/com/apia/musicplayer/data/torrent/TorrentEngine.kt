@@ -11,7 +11,7 @@ import org.libtorrent4j.Priority
 import org.libtorrent4j.SessionManager
 import org.libtorrent4j.SessionParams
 import org.libtorrent4j.SettingsPack
-import org.libtorrent4j.TorrentHandle
+import org.libtorrent4j.Sha1Hash
 import org.libtorrent4j.alerts.AddTorrentAlert
 import org.libtorrent4j.alerts.Alert
 import org.libtorrent4j.alerts.AlertType
@@ -53,16 +53,22 @@ class TorrentEngine @Inject constructor(
     init {
         setupAlerts()
         val sp = SettingsPack().apply {
+            // DHT bootstrap routers via settings
+            setString(
+                settings_pack.string_types.dht_bootstrap_nodes.swigValue(),
+                "router.bittorrent.com:6881,router.utorrent.com:6881,dht.transmissionbt.com:6881"
+            )
             setInteger(settings_pack.int_types.active_downloads.swigValue(), 5)
             setInteger(settings_pack.int_types.active_seeds.swigValue(), 3)
             setInteger(settings_pack.int_types.connections_limit.swigValue(), 200)
             setInteger(settings_pack.int_types.upload_rate_limit.swigValue(), 0)
             setInteger(settings_pack.int_types.download_rate_limit.swigValue(), 0)
+            setBoolean(settings_pack.bool_types.enable_dht.swigValue(), true)
+            setBoolean(settings_pack.bool_types.enable_lsd.swigValue(), true)
+            setBoolean(settings_pack.bool_types.enable_upnp.swigValue(), true)
+            setBoolean(settings_pack.bool_types.enable_natpmp.swigValue(), true)
         }
         sessionManager.start(SessionParams(sp))
-        sessionManager.addDhtRouter("router.bittorrent.com", 6881)
-        sessionManager.addDhtRouter("router.utorrent.com", 6881)
-        sessionManager.addDhtRouter("dht.transmissionbt.com", 6881)
     }
 
     private fun setupAlerts() {
@@ -80,27 +86,28 @@ class TorrentEngine @Inject constructor(
                         _torrents.update { map ->
                             map + (hash to TorrentState(
                                 infoHash = hash,
-                                name = h.status().name(),
+                                name = try { h.name() } catch (e: Exception) { hash.take(8) },
                                 status = TorrentStatus.QUEUED,
                                 savePath = h.savePath()
                             ))
                         }
                     }
                     AlertType.STATE_UPDATE -> {
-                        val a = alert as StateUpdateAlert
+                        val statuses = (alert as StateUpdateAlert).status()
                         val updates = mutableMapOf<String, TorrentState>()
-                        for (st in a.status()) {
+                        for (st in statuses) {
                             val hash = st.infoHash().toHex()
+                            val handle = sessionManager.find(Sha1Hash(hash))
                             updates[hash] = TorrentState(
                                 infoHash = hash,
-                                name = st.name(),
+                                name = st.name().ifBlank { hash.take(8) },
                                 progress = st.progress(),
                                 downloadSpeed = st.downloadPayloadRate().toLong(),
                                 uploadSpeed = st.uploadPayloadRate().toLong(),
                                 seeders = st.numSeeds(),
                                 peers = st.numPeers(),
                                 status = mapState(st.state()),
-                                savePath = st.savePath(),
+                                savePath = handle?.savePath() ?: "",
                                 totalBytes = st.totalWanted(),
                                 downloadedBytes = st.totalWantedDone()
                             )
@@ -109,7 +116,10 @@ class TorrentEngine @Inject constructor(
                     }
                     AlertType.TORRENT_FINISHED -> {
                         val h = (alert as TorrentFinishedAlert).handle()
+                        if (!h.isValid) return
                         val hash = h.infoHash().toHex()
+                        // Prioritize audio files after metadata is available
+                        prioritizeAudioFiles(hash)
                         _torrents.update { map ->
                             val cur = map[hash] ?: return@update map
                             map + (hash to cur.copy(status = TorrentStatus.FINISHED, progress = 1f))
@@ -117,10 +127,15 @@ class TorrentEngine @Inject constructor(
                     }
                     AlertType.TORRENT_ERROR -> {
                         val a = alert as TorrentErrorAlert
-                        val hash = a.handle().infoHash().toHex()
+                        val h = a.handle()
+                        if (!h.isValid) return
+                        val hash = h.infoHash().toHex()
                         _torrents.update { map ->
                             val cur = map[hash] ?: return@update map
-                            map + (hash to cur.copy(status = TorrentStatus.ERROR, error = a.error().message()))
+                            map + (hash to cur.copy(
+                                status = TorrentStatus.ERROR,
+                                error = a.error().message()
+                            ))
                         }
                     }
                     else -> {}
@@ -129,50 +144,63 @@ class TorrentEngine @Inject constructor(
         })
     }
 
+    /** Add magnet link, returns info hash string */
     fun addMagnet(magnetUri: String): String {
         sessionManager.download(magnetUri, downloadDir)
-        return magnetUri.substringAfter("xt=urn:btih:").substringBefore("&").lowercase()
+        return extractInfoHash(magnetUri)
     }
 
-    fun prioritizeAudioFiles(handle: TorrentHandle) {
+    /** Prioritize only audio files, skip everything else */
+    fun prioritizeAudioFiles(infoHash: String) {
+        val handle = sessionManager.find(Sha1Hash(infoHash)) ?: return
         val info = handle.torrentFile() ?: return
-        val audioExts = setOf("mp3", "flac", "m4a", "ogg", "opus", "wav", "aac")
+        val audioExts = setOf("mp3", "flac", "m4a", "ogg", "opus", "wav", "aac", "wma")
         val priorities = Array(info.numFiles()) { Priority.IGNORE }
         for (i in 0 until info.numFiles()) {
-            val name = info.files().fileName(i).lowercase()
-            if (audioExts.any { name.endsWith(".$it") }) priorities[i] = Priority.SEVEN
+            val fileName = info.files().fileName(i).lowercase()
+            if (audioExts.any { fileName.endsWith(".$it") }) {
+                priorities[i] = Priority.SEVEN
+            }
         }
         handle.prioritizeFiles(priorities)
     }
 
+    /** Get downloaded audio files for a torrent */
     fun getAudioFiles(infoHash: String): List<File> {
-        val handle = sessionManager.find(org.libtorrent4j.Sha1Hash(infoHash)) ?: return emptyList()
+        val handle = sessionManager.find(Sha1Hash(infoHash)) ?: return emptyList()
         val info = handle.torrentFile() ?: return emptyList()
-        val audioExts = setOf("mp3", "flac", "m4a", "ogg", "opus", "wav", "aac")
-        return (0 until info.numFiles())
-            .filter { audioExts.any { ext -> info.files().fileName(it).lowercase().endsWith(".$ext") } }
-            .map { File(handle.savePath(), info.files().filePath(it)) }
-    }
-
-    fun pause(infoHash: String) {
-        sessionManager.find(org.libtorrent4j.Sha1Hash(infoHash))?.pause()
-        _torrents.update { map ->
-            val cur = map[infoHash] ?: return@update map
-            map + (infoHash to cur.copy(status = TorrentStatus.PAUSED))
+        val audioExts = setOf("mp3", "flac", "m4a", "ogg", "opus", "wav", "aac", "wma")
+        val base = File(handle.savePath())
+        return (0 until info.numFiles()).mapNotNull { i ->
+            val filePath = info.files().filePath(i)
+            if (audioExts.any { filePath.lowercase().endsWith(".$it") }) File(base, filePath)
+            else null
         }
     }
 
-    fun resume(infoHash: String) {
-        sessionManager.find(org.libtorrent4j.Sha1Hash(infoHash))?.resume()
+    fun pause(infoHash: String) {
+        sessionManager.find(Sha1Hash(infoHash))?.pause()
+        updateStatus(infoHash, TorrentStatus.PAUSED)
     }
 
-    fun remove(infoHash: String, deleteFiles: Boolean = false) {
-        val handle = sessionManager.find(org.libtorrent4j.Sha1Hash(infoHash)) ?: return
-        sessionManager.remove(handle)
+    fun resume(infoHash: String) = sessionManager.find(Sha1Hash(infoHash))?.resume()
+
+    fun remove(infoHash: String) {
+        sessionManager.find(Sha1Hash(infoHash))?.let { sessionManager.remove(it) }
         _torrents.update { it - infoHash }
     }
 
     fun stop() = sessionManager.stop()
+
+    private fun updateStatus(infoHash: String, status: TorrentStatus) {
+        _torrents.update { map ->
+            val cur = map[infoHash] ?: return@update map
+            map + (infoHash to cur.copy(status = status))
+        }
+    }
+
+    private fun extractInfoHash(magnetUri: String): String =
+        magnetUri.substringAfter("xt=urn:btih:").substringBefore("&").lowercase()
 
     private fun mapState(state: org.libtorrent4j.TorrentStatus.State): TorrentStatus = when (state) {
         org.libtorrent4j.TorrentStatus.State.CHECKING_FILES,
