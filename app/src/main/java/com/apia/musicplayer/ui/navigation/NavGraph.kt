@@ -4,11 +4,11 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import com.apia.musicplayer.ui.screens.downloads.DownloadsScreen
 import com.apia.musicplayer.ui.screens.library.LibraryScreen
 import com.apia.musicplayer.ui.screens.player.PlayerScreen
 import com.apia.musicplayer.ui.screens.search.SearchScreen
 import com.apia.musicplayer.ui.screens.torrent.TorrentSearchScreen
+import com.apia.musicplayer.ui.screens.torrent.TorrentDownloadsScreen
 
 sealed class Screen(val route: String) {
     object Library   : Screen("library")
@@ -31,10 +31,10 @@ fun MusicNavGraph(navController: NavHostController) {
             SearchScreen(onTrackClick = { navController.navigate(Screen.Player.route) })
         }
         composable(Screen.Torrent.route) {
-            TorrentSearchScreen(onDownloadStarted = { navController.navigate(Screen.Downloads.route) })
+            TorrentSearchScreen()
         }
         composable(Screen.Downloads.route) {
-            DownloadsScreen()
+            TorrentDownloadsScreen()
         }
     }
 }
