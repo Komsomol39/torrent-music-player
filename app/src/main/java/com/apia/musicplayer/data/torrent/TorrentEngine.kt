@@ -138,7 +138,7 @@ class TorrentEngine @Inject constructor(
         } else {
             // Fallback: добавляем через AddTorrentParams + swig API
             val params = AddTorrentParams.parseMagnetUri(magnetUri)
-            params.savePath(downloadDir.absolutePath)
+            params.setSavePath(downloadDir.absolutePath)
             val ec = org.libtorrent4j.ErrorCode()
             sessionManager.swig().async_add_torrent(params.swig())
             hash
@@ -188,7 +188,7 @@ class TorrentEngine @Inject constructor(
     fun getTorrentState(infoHash: String): TorrentState? = _torrents.value[infoHash]
 
     private fun findHandle(infoHash: String): TorrentHandle? =
-        try { sessionManager.find(Sha1Hash(infoHash)) } catch (e: Exception) { null }
+        try { sessionManager.find(Sha1Hash.parseHex(infoHash)) } catch (e: Exception) { null }
 
     fun stop() = sessionManager.stop()
 }
