@@ -125,22 +125,20 @@ class TorrentEngine @Inject constructor(
     fun addMagnet(magnetUri: String): String {
         // fetchMagnet(magnet, timeoutSec, saveDir) → byte[] метаданных
         val data = sessionManager.fetchMagnet(magnetUri, 30, tmpDir)
+        val hash = magnetUri
+            .substringAfter("xt=urn:btih:", "")
+            .substringBefore("&")
+            .lowercase()
+            .ifBlank { magnetUri.hashCode().toString() }
         return if (data != null) {
             val ti = TorrentInfo.bdecode(data)
             sessionManager.download(ti, downloadDir)
-            ti.infoHashV1().toHex()
+            try { ti.infoHash().toHex() } catch (e: Exception) { hash }
         } else {
-            // Fallback: добавляем через TorrentBuilder без метаданных
-            // (метаданные будут получены от peers)
-            val builder = TorrentBuilder()
-            builder.magnetUri(magnetUri)
-            builder.savePath(downloadDir.absolutePath)
-            sessionManager.swig().async_add_torrent(builder.build().swig())
-            magnetUri
-                .substringAfter("xt=urn:btih:", "")
-                .substringBefore("&")
-                .lowercase()
-                .ifBlank { magnetUri.hashCode().toString() }
+            // Fallback без метаданных — добавляем напрямую,
+            // libtorrent получит metadata_t от peers через DHT
+            sessionManager.download(magnetUri, downloadDir)
+            hash
         }
     }
 
