@@ -8,26 +8,28 @@ import javax.inject.Singleton
 
 @Singleton
 class SearchAggregator @Inject constructor(
-    val rutracker:  RuTrackerProvider,
-    val rutor:      RuTorProvider,
-    val kinozal:    KinozalProvider,
-    val nnmclub:    NnmClubProvider,
-    val unionpeer:  UnionPeerProvider,
-    val tpb:        TpbProvider,
-    val nyaa:       NyaaProvider,
-    val x1337:      X1337Provider,
-    val vk:         VkMusicProvider,
-    val youtube:    YouTubeProvider,
+    val rutracker: RuTrackerProvider,
+    val rutor:     RuTorProvider,
+    val kinozal:   KinozalProvider,
+    val nnmclub:   NnmClubProvider,
+    val unionpeer: UnionPeerProvider,
+    val tpb:       TpbProvider,
+    val nyaa:      NyaaProvider,
+    val x1337:     X1337Provider,
+    val vk:        VkMusicProvider,
+    val youtube:   YouTubeProvider,
     val soundcloud: SoundCloudProvider,
-    val deezer:     DeezerProvider,
-    val yandex:     YandexMusicProvider,
-    val zaycev:     ZaycevProvider,
-    val archive:    ArchiveOrgProvider,
-    val bandcamp:   BandcampProvider,
-    val jamendo:    JamendoProvider,
-    val fma:        FmaProvider
+    val deezer:    DeezerProvider,
+    val yandex:    YandexMusicProvider,
+    val zaycev:    ZaycevProvider,
+    val archive:   ArchiveOrgProvider,
+    val bandcamp:  BandcampProvider,
+    val jamendo:   JamendoProvider,
+    val fma:       FmaProvider
 ) {
-    val enabledSources = SearchSource.DEFAULT_ENABLED.toMutableSet()
+    val enabledSources = mutableSetOf(
+        *SearchSource.entries.filter { it.meta.defaultEnabled }.toTypedArray()
+    )
 
     fun providerFor(source: SearchSource): SearchProvider? = when (source) {
         SearchSource.RUTRACKER  -> rutracker
@@ -53,21 +55,22 @@ class SearchAggregator @Inject constructor(
     suspend fun searchAll(
         query: String,
         sources: Set<SearchSource> = enabledSources,
-        onPartialResult: (SearchSource, List<TorrentResult>) -> Unit
+        onPartialResult: (source: SearchSource, results: List<TorrentResult>) -> Unit
     ) = coroutineScope {
         sources.map { source ->
             async {
+                val provider = providerFor(source) ?: return@async
                 try {
-                    val r = providerFor(source)?.search(query) ?: return@async
-                    if (r.isNotEmpty()) onPartialResult(source, r)
+                    val results = provider.search(query)
+                    if (results.isNotEmpty()) onPartialResult(source, results)
                 } catch (e: Exception) { /* source unavailable */ }
             }
         }.awaitAll()
     }
 
-    suspend fun search(query: String, source: SearchSource) =
+    suspend fun search(query: String, source: SearchSource): List<TorrentResult> =
         providerFor(source)?.search(query) ?: emptyList()
 
-    suspend fun getMagnet(result: TorrentResult, source: SearchSource) =
+    suspend fun getMagnet(result: TorrentResult, source: SearchSource): String =
         providerFor(source)?.getMagnet(result) ?: result.magnetLink
 }
