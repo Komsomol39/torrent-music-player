@@ -17,15 +17,12 @@ import com.apia.musicplayer.ui.util.formatSize
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TorrentSearchScreen(
-    onDownloadStarted: () -> Unit = {},
-    viewModel: TorrentViewModel = hiltViewModel()
-) {
+fun TorrentSearchScreen(viewModel: TorrentViewModel = hiltViewModel()) {
     val query by viewModel.query.collectAsState()
     val results by viewModel.results.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
-    val downloadingIds by viewModel.downloadingIds.collectAsState()
+    val downloads by viewModel.downloads.collectAsState()
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Spacer(Modifier.height(16.dp))
@@ -33,7 +30,7 @@ fun TorrentSearchScreen(
             OutlinedTextField(
                 value = query,
                 onValueChange = { viewModel.onQueryChange(it) },
-                placeholder = { Text("Artist, album, track...") },
+                placeholder = { Text("Search torrents...") },
                 leadingIcon = { Icon(Icons.Default.Search, null) },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
@@ -48,35 +45,21 @@ fun TorrentSearchScreen(
 
         when {
             isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator()
-                    Spacer(Modifier.height(8.dp))
-                    Text("Searching torrents...", style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                CircularProgressIndicator()
             }
             error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Error, null, tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(48.dp))
-                    Spacer(Modifier.height(8.dp))
-                    Text(error ?: "Error", color = MaterialTheme.colorScheme.error)
-                    Spacer(Modifier.height(8.dp))
-                    TextButton(onClick = { viewModel.search() }) { Text("Retry") }
-                }
+                Text(error ?: "Error", color = MaterialTheme.colorScheme.error)
             }
             results.isEmpty() && query.isNotBlank() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No results found for \"$query\"")
+                Text("No results found")
             }
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(results, key = { it.id }) { result ->
+                    val isDownloading = downloads.values.any { it.name.contains(result.title.take(20)) }
                     TorrentResultItem(
                         result = result,
-                        isDownloading = downloadingIds.contains(result.id),
-                        onDownload = {
-                            viewModel.download(result)
-                            onDownloadStarted()
-                        }
+                        isDownloading = isDownloading,
+                        onDownload = { viewModel.download(result) }
                     )
                 }
             }
@@ -87,12 +70,13 @@ fun TorrentSearchScreen(
 @Composable
 fun TorrentResultItem(
     result: TorrentResult,
-    isDownloading: Boolean,
+    isDownloading: Boolean = false,
     onDownload: () -> Unit
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Album, null, tint = MaterialTheme.colorScheme.primary,
+            Icon(Icons.Default.Album, null,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(40.dp))
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -103,26 +87,19 @@ fun TorrentResultItem(
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (result.sizeBytes > 0) {
-                        Text(result.sizeBytes.formatSize(), style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                    Text(result.sizeBytes.formatSize(), style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("S:${result.seeders}", style = MaterialTheme.typography.labelSmall,
-                        color = if (result.seeders > 0) MaterialTheme.colorScheme.primary
-                               else MaterialTheme.colorScheme.error)
-                    AssistChip(
-                        onClick = {},
-                        label = { Text(result.source, style = MaterialTheme.typography.labelSmall) },
-                        modifier = Modifier.height(20.dp)
-                    )
+                        color = MaterialTheme.colorScheme.primary)
+                    Text(result.source, style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.secondary)
                 }
             }
             if (isDownloading) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                CircularProgressIndicator(modifier = Modifier.size(24.dp).padding(4.dp))
             } else {
                 IconButton(onClick = onDownload) {
-                    Icon(Icons.Default.Download, "Download",
-                        tint = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.Default.Download, "Download", tint = MaterialTheme.colorScheme.primary)
                 }
             }
         }
