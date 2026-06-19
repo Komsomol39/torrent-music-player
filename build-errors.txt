@@ -1,22 +1,16 @@
 > Task :app:compileDebugKotlin FAILED
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:51:12 Unresolved reference: activeTorrents
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:57:22 Unresolved reference: settings_pack
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:67:31 Unresolved reference: TORRENT_ADDED
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:68:42 Unresolved reference: TorrentAddedAlert
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:71:42 Type mismatch: inferred type is Unit but Map<String, TorrentState> was expected
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:85:43 Unresolved reference: infoHash
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:95:47 Unresolved reference: savePath
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:124:51 Expression 'message' of type 'String!' cannot be invoked as a function. The function 'invoke()' is not found
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:135:24 Unresolved reference: addDhtRouter
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:136:24 Unresolved reference: addDhtRouter
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:137:24 Unresolved reference: addDhtRouter
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:146:12 Unresolved reference. None of the following candidates is applicable because of receiver type mismatch: 
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:147:12 Unresolved reference. None of the following candidates is applicable because of receiver type mismatch: 
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:147:21 Expression 'flags' of type 'torrent_flags_t!' cannot be invoked as a function. The function 'invoke()' is not found
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:148:33 Type mismatch: inferred type is String but TorrentInfo! was expected
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:167:42 Unresolved reference: SEVEN
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:205:39 Type mismatch: inferred type is Any! but remove_flags_t! was expected
-e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:212:38 Type mismatch: inferred type is String but sha1_hash! was expected
+e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:63:24 Unresolved reference: addDhtRouter
+e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:64:24 Unresolved reference: addDhtRouter
+e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:65:24 Unresolved reference: addDhtRouter
+e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:93:43 Unresolved reference: infoHash
+e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:103:47 Unresolved reference: savePath
+e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:123:101 Expression 'message' of type 'String!' cannot be invoked as a function. The function 'invoke()' is not found
+e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:133:33 Type mismatch: inferred type is String but TorrentInfo! was expected
+e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:143:83 Unresolved reference: SEVEN
+e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:149:68 Type mismatch: inferred type is String but sha1_hash! was expected
+e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:158:55 Type mismatch: inferred type is String but sha1_hash! was expected
+e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:166:55 Type mismatch: inferred type is String but sha1_hash! was expected
+e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:170:68 Type mismatch: inferred type is String but sha1_hash! was expected
 e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentService.kt:25:16 Unresolved reference: start
 e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentService.kt:30:20 Unresolved reference: downloads
 e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentService.kt:30:46 Cannot infer a type for this parameter. Please specify it explicitly.
@@ -40,4 +34,4 @@ Caused by: org.gradle.workers.internal.DefaultWorkerExecutor$WorkExecutionExcept
 	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:36)
 Caused by: org.jetbrains.kotlin.gradle.tasks.CompilationErrorException: Compilation error. See log for more details
 	at org.jetbrains.kotlin.gradle.tasks.TasksUtilsKt.throwExceptionIfCompilationFailed(tasksUtils.kt:20)
-BUILD FAILED in 3m 7s
+BUILD FAILED in 3m 12s
