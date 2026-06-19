@@ -10,7 +10,16 @@ fun Long.formatDuration(): String {
 fun Long.formatSize(): String {
     return when {
         this >= 1_073_741_824 -> "%.1f GB".format(this / 1_073_741_824.0)
-        this >= 1_048_576 -> "%.1f MB".format(this / 1_048_576.0)
-        else -> "%.0f KB".format(this / 1024.0)
+        this >= 1_048_576     -> "%.1f MB".format(this / 1_048_576.0)
+        this >= 1_024         -> "%.0f KB".format(this / 1024.0)
+        else                  -> "${this}B"
+    }
+}
+
+fun Long.formatSpeed(): String {
+    return when {
+        this >= 1_048_576 -> "%.1f MB/s".format(this / 1_048_576.0)
+        this >= 1_024     -> "%.0f KB/s".format(this / 1024.0)
+        else              -> "${this}B/s"
     }
 }
