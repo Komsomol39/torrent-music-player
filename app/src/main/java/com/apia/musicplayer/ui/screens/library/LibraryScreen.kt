@@ -6,7 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,21 +23,69 @@ import com.apia.musicplayer.ui.util.formatDuration
 @Composable
 fun LibraryScreen(
     onTrackClick: () -> Unit,
-    viewModel: LibraryViewModel = hiltViewModel()
+    libraryViewModel: LibraryViewModel = hiltViewModel(),
+    scanViewModel: ScanViewModel = hiltViewModel()
 ) {
-    val tracks by viewModel.tracks.collectAsState()
+    val tracks by libraryViewModel.tracks.collectAsState()
+    val isScanning by scanViewModel.isScanning.collectAsState()
+    val lastCount by scanViewModel.lastScanCount.collectAsState()
+    var showSnack by remember { mutableStateOf(false) }
+
+    LaunchedEffect(lastCount) {
+        if (lastCount > 0) showSnack = true
+    }
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Library") })
+            TopAppBar(
+                title = { Text("Library") },
+                actions = {
+                    if (isScanning) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp).padding(end = 8.dp))
+                    } else {
+                        IconButton(onClick = { scanViewModel.scan() }) {
+                            Icon(Icons.Default.Refresh, "Scan library")
+                        }
+                    }
+                }
+            )
+        },
+        floatingActionButton = {
+            if (tracks.isEmpty()) {
+                ExtendedFloatingActionButton(
+                    onClick = { scanViewModel.scan() },
+                    icon = { Icon(Icons.Default.LibraryMusic, null) },
+                    text = { Text("Scan Library") }
+                )
+            }
+        },
+        snackbarHost = {
+            if (showSnack) {
+                Snackbar(
+                    modifier = Modifier.padding(16.dp),
+                    action = { TextButton(onClick = { showSnack = false }) { Text("OK") } }
+                ) {
+                    Text("Found $lastCount tracks")
+                }
+            }
         }
     ) { padding ->
         if (tracks.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Default.LibraryMusic, null,
+                        modifier = Modifier.size(72.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("No tracks yet", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(8.dp))
-                    Text("Search or download via Torrent tab", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Tap Scan to find music on your device",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("or search the Torrent tab to download",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         } else {
@@ -46,11 +94,14 @@ fun LibraryScreen(
                     TrackItem(
                         track = track,
                         onClick = {
-                            viewModel.playTrack(track, tracks)
+                            libraryViewModel.playTrack(track, tracks)
                             onTrackClick()
                         }
                     )
-                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                    HorizontalDivider(
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                    )
                 }
             }
         }
@@ -60,17 +111,35 @@ fun LibraryScreen(
 @Composable
 fun TrackItem(track: Track, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        AlbumArtwork(uri = track.artworkUri, modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)))
+        AlbumArtwork(
+            uri = track.artworkUri,
+            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp))
+        )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(track.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("${track.artist} • ${track.duration.formatDuration()}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                track.title,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                "${track.artist} • ${track.duration.formatDuration()}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
-        IconButton(onClick = { /* menu */ }) {
-            Icon(Icons.Default.MoreVert, "More", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        IconButton(onClick = { }) {
+            Icon(Icons.Default.MoreVert, "More",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
