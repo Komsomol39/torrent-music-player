@@ -1,3 +1,2 @@
-67:> Task :app:compileDebugKotlin FAILED
-68:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/search/NnmClubProvider.kt:54:37 Illegal escape: '\d'
-83:BUILD FAILED in 3m 7s
+68:w: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/ui/screens/search/SearchViewModel.kt:23:10 This declaration is in a preview state and can be changed in a backwards-incompatible manner with a best-effort migration. Its usage should be marked with '@kotlinx.coroutines.FlowPreview' or '@OptIn(kotlinx.coroutines.FlowPreview::class)' if you accept the drawback of relying on preview API
+69:w: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/ui/screens/torrent/TorrentRepository.kt:30:31 Parameter 'result' is never used
