@@ -1,114 +1,60 @@
 package com.apia.musicplayer.domain.model
 
 enum class SourceCategory(val label: String) {
-    RUSSIAN("🇷🇺 Российские"),
+    RU("🇷🇺 Российские"),
     CIS("🌐 СНГ"),
     WORLD("🌍 Мировые"),
-    MUSIC("🎵 Музыкальные сервисы"),
-    LEGAL("✅ Легальные / бесплатные")
+    MUSIC("🎵 Музыкальные"),
+    FREE("✅ Легальные / Бесплатные")
 }
 
-data class SourceInfo(
-    val source: SearchSource,
+data class SourceMeta(
+    val displayName: String,
     val category: SourceCategory,
+    val emoji: String,
     val description: String,
-    val requiresLogin: Boolean = false,
-    val requiresToken: Boolean = false,
-    val quality: String = "",         // "FLAC", "MP3 320", "varies"
-    val enabledByDefault: Boolean = false
+    val quality: String,          // "MP3 128" / "MP3 320" / "FLAC" / "Mixed"
+    val authType: AuthType,
+    val defaultEnabled: Boolean = false
 )
 
-enum class SearchSource(val displayName: String, val emoji: String) {
-    // Российские торренты
-    RUTRACKER("RuTracker",    "🔴"),
-    RUTOR("RuTor",            "🟠"),
-    KINOZAL("Kinozal",        "🟡"),
+enum class AuthType {
+    NONE,           // без регистрации
+    LOGIN_PASS,     // логин + пароль
+    TOKEN,          // один токен/ключ
+    OPTIONAL_TOKEN  // без ключа работает, с ключом лучше
+}
 
-    // СНГ торренты
-    NNMCLUB("NNM-Club",       "🟢"),
-    UNIONPEER("UnionPeer",    "🔵"),
+enum class SearchSource {
+    // ── Российские ──────────────────────────────────────────
+    RUTRACKER,   RUTOR,   KINOZAL,
+    // ── СНГ ─────────────────────────────────────────────────
+    NNMCLUB,     UNIONPEER,
+    // ── Мировые ─────────────────────────────────────────────
+    TPB,         NYAA,    X1337,
+    // ── Музыкальные сервисы ──────────────────────────────────
+    VK,          YOUTUBE, SOUNDCLOUD, DEEZER, YANDEX, ZAYCEV,
+    // ── Легальные / Бесплатные ──────────────────────────────
+    ARCHIVE,     BANDCAMP, JAMENDO,   FMA;
 
-    // Мировые торренты
-    TPB("Pirate Bay",         "⚫"),
-    NYAA("Nyaa",              "🟣"),
-    X1337("1337x",            "🟤"),
-
-    // Музыкальные сервисы
-    VK("VK Music",            "💙"),
-    YOUTUBE("YouTube",        "❤️"),
-    SOUNDCLOUD("SoundCloud",  "🟠"),
-    DEEZER("Deezer",          "🟣"),
-    YANDEX("Яндекс.Музыка",   "🟡"),
-    ZAYCEV("Zaycev.net",      "🎵"),
-
-    // Легальные / бесплатные
-    ARCHIVE("Archive.org",   "📚"),
-    BANDCAMP("Bandcamp",      "🎸"),
-    JAMENDO("Jamendo",        "🎼"),
-    FMA("Free Music Archive", "🆓");
-
-    companion object {
-        val ALL_SOURCES = listOf(
-            SourceInfo(RUTRACKER, SourceCategory.RUSSIAN,
-                "Крупнейший русскоязычный трекер. Огромная коллекция FLAC и MP3.",
-                requiresLogin = true, quality = "FLAC / MP3", enabledByDefault = false),
-            SourceInfo(RUTOR, SourceCategory.RUSSIAN,
-                "Без регистрации. Magnet прямо в поиске.",
-                quality = "MP3 / FLAC", enabledByDefault = true),
-            SourceInfo(KINOZAL, SourceCategory.RUSSIAN,
-                "Строгая модерация = высокое качество. Лучший FLAC на рунете.",
-                requiresLogin = true, quality = "FLAC Hi-Res", enabledByDefault = false),
-
-            SourceInfo(NNMCLUB, SourceCategory.CIS,
-                "NNM-Club — крупный СНГ трекер с музыкой и видео.",
-                requiresLogin = true, quality = "FLAC / MP3", enabledByDefault = false),
-            SourceInfo(UNIONPEER, SourceCategory.CIS,
-                "UnionPeer — СНГ трекер, без регистрации.",
-                quality = "MP3", enabledByDefault = false),
-
-            SourceInfo(TPB, SourceCategory.WORLD,
-                "The Pirate Bay — открытый JSON API, без логина.",
-                quality = "varies", enabledByDefault = true),
-            SourceInfo(NYAA, SourceCategory.WORLD,
-                "Nyaa.si — аниме и азиатская музыка. RSS API.",
-                quality = "FLAC / MP3", enabledByDefault = true),
-            SourceInfo(X1337, SourceCategory.WORLD,
-                "1337x — большой каталог, magnet со страницы.",
-                quality = "varies", enabledByDefault = false),
-
-            SourceInfo(VK, SourceCategory.MUSIC,
-                "VK Музыка — прямые MP3. Нужен Kate Mobile токен.",
-                requiresToken = true, quality = "MP3 320", enabledByDefault = false),
-            SourceInfo(YOUTUBE, SourceCategory.MUSIC,
-                "YouTube — видео/аудио. Работает без ключа (scraping).",
-                quality = "varies", enabledByDefault = false),
-            SourceInfo(SOUNDCLOUD, SourceCategory.MUSIC,
-                "SoundCloud — официальный API, инди и электроника.",
-                requiresToken = true, quality = "MP3 128-256", enabledByDefault = false),
-            SourceInfo(DEEZER, SourceCategory.MUSIC,
-                "Deezer — высокое качество, неофициальный токен ARL.",
-                requiresToken = true, quality = "MP3 320 / FLAC", enabledByDefault = false),
-            SourceInfo(YANDEX, SourceCategory.MUSIC,
-                "Яндекс.Музыка — лучший каталог для СНГ. Токен из браузера.",
-                requiresToken = true, quality = "MP3 320 / FLAC", enabledByDefault = false),
-            SourceInfo(ZAYCEV, SourceCategory.MUSIC,
-                "Zaycev.net — старый русский сайт, без регистрации.",
-                quality = "MP3 192", enabledByDefault = false),
-
-            SourceInfo(ARCHIVE, SourceCategory.LEGAL,
-                "Archive.org — миллионы легальных записей, без ключа.",
-                quality = "varies (FLAC есть)", enabledByDefault = true),
-            SourceInfo(BANDCAMP, SourceCategory.LEGAL,
-                "Bandcamp — официальный API, инди артисты, часть бесплатно.",
-                quality = "FLAC / MP3 320", enabledByDefault = false),
-            SourceInfo(JAMENDO, SourceCategory.LEGAL,
-                "Jamendo — 600K+ CC лицензированных треков, API бесплатный.",
-                requiresToken = true, quality = "MP3 320", enabledByDefault = false),
-            SourceInfo(FMA, SourceCategory.LEGAL,
-                "Free Music Archive — тысячи свободных треков под CC.",
-                quality = "MP3 / FLAC", enabledByDefault = false),
-        )
-
-        val DEFAULT_ENABLED = ALL_SOURCES.filter { it.enabledByDefault }.map { it.source }.toSet()
+    val meta: SourceMeta get() = when (this) {
+        RUTRACKER  -> SourceMeta("RuTracker",   SourceCategory.RU,    "🎸", "Крупнейший рус. трекер. Лучший FLAC каталог", "FLAC / MP3 320", AuthType.LOGIN_PASS)
+        RUTOR      -> SourceMeta("RuTor",       SourceCategory.RU,    "🎵", "Без регистрации, большой каталог", "Mixed", AuthType.NONE, defaultEnabled = true)
+        KINOZAL    -> SourceMeta("Kinozal",     SourceCategory.RU,    "💿", "Высокое качество, строгая модерация", "FLAC", AuthType.LOGIN_PASS)
+        NNMCLUB    -> SourceMeta("NNM-Club",    SourceCategory.CIS,   "🌐", "СНГ трекер, активное сообщество", "Mixed", AuthType.LOGIN_PASS)
+        UNIONPEER  -> SourceMeta("UnionPeer",   SourceCategory.CIS,   "🤝", "Без регистрации", "Mixed", AuthType.NONE)
+        TPB        -> SourceMeta("Pirate Bay",  SourceCategory.WORLD, "🏴‍☠️", "JSON API, мгновенный magnet", "Mixed", AuthType.NONE, defaultEnabled = true)
+        NYAA       -> SourceMeta("Nyaa.si",     SourceCategory.WORLD, "🌸", "RSS, лучший для аниме/джаз OST", "FLAC / MP3", AuthType.NONE, defaultEnabled = true)
+        X1337      -> SourceMeta("1337x",       SourceCategory.WORLD, "🔢", "HTML scraping, большой каталог", "Mixed", AuthType.NONE)
+        VK         -> SourceMeta("VK Music",    SourceCategory.MUSIC, "💙", "Прямые MP3, огромный рус. каталог", "MP3 320", AuthType.TOKEN)
+        YOUTUBE    -> SourceMeta("YouTube",     SourceCategory.MUSIC, "▶️",  "Поиск клипов/аудио. Без ключа — scraping", "Mixed", AuthType.OPTIONAL_TOKEN)
+        SOUNDCLOUD -> SourceMeta("SoundCloud",  SourceCategory.MUSIC, "🟠", "Официальный API, инди/электроника", "MP3 128", AuthType.OPTIONAL_TOKEN)
+        DEEZER     -> SourceMeta("Deezer",      SourceCategory.MUSIC, "🎧", "Public API + ARL cookie для полных треков", "MP3 320", AuthType.OPTIONAL_TOKEN)
+        YANDEX     -> SourceMeta("Яндекс.Музыка", SourceCategory.MUSIC, "🟡", "Неофициальный API, токен из браузера", "MP3 320", AuthType.TOKEN)
+        ZAYCEV     -> SourceMeta("Зайцев.нет",  SourceCategory.MUSIC, "🐰", "Без регистрации, HTML scraping", "MP3 128", AuthType.NONE)
+        ARCHIVE    -> SourceMeta("Archive.org", SourceCategory.FREE,  "📚", "Легальный, CC лицензии, REST API", "FLAC / MP3", AuthType.NONE, defaultEnabled = true)
+        BANDCAMP   -> SourceMeta("Bandcamp",    SourceCategory.FREE,  "🎪", "Инди артисты, часть треков бесплатно", "MP3 / FLAC", AuthType.NONE)
+        JAMENDO    -> SourceMeta("Jamendo",     SourceCategory.FREE,  "🎶", "CC музыка, встроенный demo ключ", "MP3 96", AuthType.OPTIONAL_TOKEN)
+        FMA        -> SourceMeta("Free Music Archive", SourceCategory.FREE, "🆓", "Полностью легальный, публичный API", "MP3 128", AuthType.OPTIONAL_TOKEN)
     }
 }
