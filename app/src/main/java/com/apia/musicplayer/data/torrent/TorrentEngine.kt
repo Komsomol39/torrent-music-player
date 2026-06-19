@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import org.libtorrent4j.*
 import org.libtorrent4j.alerts.*
+import org.libtorrent4j.AddTorrentParams
 import org.libtorrent4j.swig.settings_pack
 import java.io.File
 import javax.inject.Inject
@@ -135,9 +136,11 @@ class TorrentEngine @Inject constructor(
             sessionManager.download(ti, downloadDir)
             try { ti.infoHash().toHex() } catch (e: Exception) { hash }
         } else {
-            // Fallback без метаданных — добавляем напрямую,
-            // libtorrent получит metadata_t от peers через DHT
-            sessionManager.download(magnetUri, downloadDir)
+            // Fallback: добавляем через AddTorrentParams + swig API
+            val params = AddTorrentParams.parseMagnetUri(magnetUri)
+            params.savePath(downloadDir.absolutePath)
+            val ec = org.libtorrent4j.ErrorCode()
+            sessionManager.swig().async_add_torrent(params.swig())
             hash
         }
     }
@@ -184,8 +187,15 @@ class TorrentEngine @Inject constructor(
 
     fun getTorrentState(infoHash: String): TorrentState? = _torrents.value[infoHash]
 
-    private fun findHandle(infoHash: String): TorrentHandle? =
-        try { sessionManager.find(Sha1Hash(infoHash)) } catch (e: Exception) { null }
+    private fun findHandle(infoHash: String): TorrentHandle? {
+        // Sha1Hash не имеет String конструктора в 2.x — ищем по hex через handles
+        return try {
+            val hex = infoHash.lowercase()
+            sessionManager.handles().firstOrNull { h ->
+                try { h.infoHash().toHex() == hex } catch (e: Exception) { false }
+            }
+        } catch (e: Exception) { null }
+    }
 
     fun stop() = sessionManager.stop()
 }
