@@ -51,7 +51,7 @@ class NnmClubProvider @Inject constructor(private val client: OkHttpClient) : Se
             val titleEl = row.selectFirst("a.gen") ?: return@forEach
             val title   = titleEl.text()
             val href    = titleEl.attr("href")
-            val topicId = Regex("t=(\d+)").find(href)?.groupValues?.get(1) ?: return@forEach
+            val topicId = Regex("t=(\\d+)").find(href)?.groupValues?.get(1) ?: return@forEach
             val seeders = row.selectFirst("span.seedmed")?.text()?.toIntOrNull() ?: 0
             val leechers = row.selectFirst("span.leechmed")?.text()?.toIntOrNull() ?: 0
 
