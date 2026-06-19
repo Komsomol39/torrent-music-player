@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import org.libtorrent4j.*
 import org.libtorrent4j.alerts.*
+import org.libtorrent4j.swig.settings_pack
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,7 +22,6 @@ data class TorrentState(
     val seeders: Int = 0,
     val peers: Int = 0,
     val status: TorrentStatus = TorrentStatus.QUEUED,
-    val savePath: String = "",
     val totalBytes: Long = 0L,
     val downloadedBytes: Long = 0L,
     val error: String? = null
@@ -44,12 +44,10 @@ class TorrentEngine @Inject constructor(
     init {
         setupAlertListener()
         val sp = SettingsPack()
-        sp.activeTorrents(10)
-        sp.activeDownloads(5)
-        sp.connectionsLimit(200)
+        sp.setInteger(settings_pack.int_types.active_downloads.swigValue(), 5)
+        sp.setInteger(settings_pack.int_types.active_seeds.swigValue(), 3)
+        sp.setInteger(settings_pack.int_types.active_limit.swigValue(), 10)
         sessionManager.start(SessionParams(sp))
-        sessionManager.addDhtRouter("router.bittorrent.com", 6881)
-        sessionManager.addDhtRouter("router.utorrent.com", 6881)
     }
 
     private fun setupAlertListener() {
@@ -58,47 +56,23 @@ class TorrentEngine @Inject constructor(
 
             override fun alert(alert: Alert<*>) {
                 when (alert.type()) {
-                    AlertType.TORRENT_ADDED -> {
-                        val a = alert as TorrentAddedAlert
-                        val h = a.handle()
-                        val hash = h.infoHash().toString()
+                    AlertType.ADD_TORRENT -> {
+                        val a = alert as AddTorrentAlert
+                        val handle = a.handle()
+                        handle.resume()
+                        val hash = handle.infoHash().toHex()
                         _torrents.update { map ->
                             map + (hash to TorrentState(
                                 infoHash = hash,
-                                name = try { h.status().name() } catch (e: Exception) { "Loading..." },
-                                status = TorrentStatus.QUEUED,
-                                savePath = downloadDir.absolutePath
+                                name = try { handle.status().name() } catch (e: Exception) { "Loading..." },
+                                status = TorrentStatus.QUEUED
                             ))
-                        }
-                    }
-
-                    AlertType.STATE_UPDATE -> {
-                        val a = alert as StateUpdateAlert
-                        val updates = mutableMapOf<String, TorrentState>()
-                        for (st in a.status()) {
-                            val hash = st.infoHash().toString()
-                            updates[hash] = TorrentState(
-                                infoHash = hash,
-                                name = st.name().ifBlank { "Loading..." },
-                                progress = st.progress(),
-                                downloadSpeed = st.downloadPayloadRate().toLong(),
-                                uploadSpeed = st.uploadPayloadRate().toLong(),
-                                seeders = st.numSeeds(),
-                                peers = st.numPeers(),
-                                status = mapState(st.state()),
-                                savePath = downloadDir.absolutePath,
-                                totalBytes = st.totalWanted(),
-                                downloadedBytes = st.totalWantedDone()
-                            )
-                        }
-                        if (updates.isNotEmpty()) {
-                            _torrents.update { map -> map + updates }
                         }
                     }
 
                     AlertType.TORRENT_FINISHED -> {
                         val a = alert as TorrentFinishedAlert
-                        val hash = a.handle().infoHash().toString()
+                        val hash = a.handle().infoHash().toHex()
                         _torrents.update { map ->
                             val cur = map[hash] ?: return@update map
                             map + (hash to cur.copy(status = TorrentStatus.FINISHED, progress = 1f))
@@ -107,11 +81,35 @@ class TorrentEngine @Inject constructor(
 
                     AlertType.TORRENT_ERROR -> {
                         val a = alert as TorrentErrorAlert
-                        val hash = a.handle().infoHash().toString()
+                        val hash = a.handle().infoHash().toHex()
+                        val errMsg = a.error().message()
                         _torrents.update { map ->
                             val cur = map[hash] ?: return@update map
-                            map + (hash to cur.copy(status = TorrentStatus.ERROR, error = a.error().message))
+                            map + (hash to cur.copy(status = TorrentStatus.ERROR, error = errMsg))
                         }
+                    }
+
+                    AlertType.BLOCK_DOWNLOADING -> {
+                        // Обновляем прогресс через handle status
+                        val a = alert as BlockDownloadingAlert
+                        val handle = a.handle()
+                        val hash = handle.infoHash().toHex()
+                        try {
+                            val st = handle.status()
+                            _torrents.update { map ->
+                                val cur = map[hash] ?: return@update map
+                                map + (hash to cur.copy(
+                                    progress = st.progress(),
+                                    downloadSpeed = st.downloadPayloadRate().toLong(),
+                                    uploadSpeed = st.uploadPayloadRate().toLong(),
+                                    seeders = st.numSeeds(),
+                                    peers = st.numPeers(),
+                                    status = TorrentStatus.DOWNLOADING,
+                                    totalBytes = st.totalWanted(),
+                                    downloadedBytes = st.totalWantedDone()
+                                ))
+                            }
+                        } catch (e: Exception) { /* ignore */ }
                     }
 
                     else -> {}
@@ -172,17 +170,7 @@ class TorrentEngine @Inject constructor(
     fun getTorrentState(infoHash: String): TorrentState? = _torrents.value[infoHash]
 
     private fun getHandle(infoHash: String): TorrentHandle? =
-        sessionManager.handles().firstOrNull { it.infoHash().toString() == infoHash }
-
-    private fun mapState(state: org.libtorrent4j.TorrentStatus.State?): TorrentStatus = when (state) {
-        org.libtorrent4j.TorrentStatus.State.CHECKING_FILES,
-        org.libtorrent4j.TorrentStatus.State.CHECKING_RESUME_DATA -> TorrentStatus.CHECKING
-        org.libtorrent4j.TorrentStatus.State.DOWNLOADING_METADATA,
-        org.libtorrent4j.TorrentStatus.State.DOWNLOADING -> TorrentStatus.DOWNLOADING
-        org.libtorrent4j.TorrentStatus.State.FINISHED,
-        org.libtorrent4j.TorrentStatus.State.SEEDING -> TorrentStatus.SEEDING
-        else -> TorrentStatus.QUEUED
-    }
+        sessionManager.handles().firstOrNull { it.infoHash().toHex() == infoHash }
 
     fun stop() = sessionManager.stop()
 }
