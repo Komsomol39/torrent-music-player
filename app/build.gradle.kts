@@ -15,8 +15,9 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
+
         ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+            abiFilters += listOf("arm64-v8a", "x86_64")
         }
     }
 
@@ -31,13 +32,18 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
     composeOptions { kotlinCompilerExtensionVersion = "1.5.14" }
 
     packaging {
-        resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        jniLibs.useLegacyPackaging = true
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 }
 
@@ -72,9 +78,7 @@ dependencies {
     implementation(libs.coroutines.android)
     implementation(libs.palette)
     implementation(libs.jsoup)
-    // libtorrent4j — production torrent client (Maven Central, v2.1.0-35)
-    implementation("org.libtorrent4j:libtorrent4j-android-arm64:2.1.0-35")
-    implementation("org.libtorrent4j:libtorrent4j-android-arm:2.1.0-35")
-    implementation("org.libtorrent4j:libtorrent4j-android-x86:2.1.0-35")
-    implementation("org.libtorrent4j:libtorrent4j-android-x86_64:2.1.0-35")
+    // libtorrent4j — production torrent engine
+    implementation(libs.libtorrent4j)
+    implementation(libs.libtorrent4j.x86)
 }
