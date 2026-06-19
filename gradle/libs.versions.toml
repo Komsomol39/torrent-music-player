@@ -13,6 +13,7 @@ coroutines = "1.8.1"
 lifecycle = "2.8.1"
 navigation = "2.7.7"
 datastore = "1.1.1"
+libtorrent4j = "2.1.0-31"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version = "1.13.1" }
@@ -45,6 +46,8 @@ datastore-prefs = { group = "androidx.datastore", name = "datastore-preferences"
 coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 palette = { group = "androidx.palette", name = "palette-ktx", version = "1.0.0" }
 jsoup = { group = "org.jsoup", name = "jsoup", version = "1.17.2" }
+libtorrent4j = { group = "org.libtorrent4j", name = "libtorrent4j-android-arm64", version.ref = "libtorrent4j" }
+libtorrent4j-x86 = { group = "org.libtorrent4j", name = "libtorrent4j-android-x86_64", version.ref = "libtorrent4j" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
