@@ -4,18 +4,20 @@ import android.content.Context
 import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.apia.musicplayer.data.torrent.TorrentService
+import com.apia.musicplayer.data.torrent.TorrentDownloadService
+import com.apia.musicplayer.data.torrent.TorrentEngine
+import com.apia.musicplayer.data.torrent.TorrentState
 import com.apia.musicplayer.domain.model.TorrentResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class TorrentViewModel @Inject constructor(
     private val repository: TorrentRepository,
+    private val engine: TorrentEngine,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -26,8 +28,9 @@ class TorrentViewModel @Inject constructor(
     val isLoading = _isLoading.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
-    private val _downloadingIds = MutableStateFlow<Set<String>>(emptySet())
-    val downloadingIds = _downloadingIds.asStateFlow()
+
+    // Активные загрузки из движка
+    val downloads: StateFlow<Map<String, TorrentState>> = engine.torrents
 
     fun onQueryChange(q: String) { query.value = q }
 
@@ -39,9 +42,8 @@ class TorrentViewModel @Inject constructor(
             _error.value = null
             try {
                 _results.value = repository.search(q)
-                if (_results.value.isEmpty()) _error.value = null
             } catch (e: Exception) {
-                _error.value = "Search failed: ${e.message}"
+                _error.value = e.message ?: "Search failed"
             } finally {
                 _isLoading.value = false
             }
@@ -50,20 +52,37 @@ class TorrentViewModel @Inject constructor(
 
     fun download(result: TorrentResult) {
         viewModelScope.launch {
-            _downloadingIds.value = _downloadingIds.value + result.id
-            try {
-                // Резолвим magnet если нужно (1337x)
-                val magnet = repository.resolveMagnet(result)
-                // Запускаем TorrentService
-                val intent = Intent(context, TorrentService::class.java).apply {
-                    action = TorrentService.ACTION_DOWNLOAD
-                    putExtra("magnet", magnet)
-                    putExtra("id", result.id)
-                }
-                context.startForegroundService(intent)
-            } finally {
-                _downloadingIds.value = _downloadingIds.value - result.id
+            val magnet = repository.resolveMagnet(result)
+            // Запускаем foreground service
+            val intent = Intent(context, TorrentDownloadService::class.java).apply {
+                action = TorrentDownloadService.ACTION_ADD_MAGNET
+                putExtra(TorrentDownloadService.EXTRA_MAGNET, magnet)
             }
+            context.startForegroundService(intent)
         }
+    }
+
+    fun pause(infoHash: String) {
+        val intent = Intent(context, TorrentDownloadService::class.java).apply {
+            action = TorrentDownloadService.ACTION_PAUSE
+            putExtra(TorrentDownloadService.EXTRA_HASH, infoHash)
+        }
+        context.startService(intent)
+    }
+
+    fun resume(infoHash: String) {
+        val intent = Intent(context, TorrentDownloadService::class.java).apply {
+            action = TorrentDownloadService.ACTION_RESUME
+            putExtra(TorrentDownloadService.EXTRA_HASH, infoHash)
+        }
+        context.startService(intent)
+    }
+
+    fun remove(infoHash: String) {
+        val intent = Intent(context, TorrentDownloadService::class.java).apply {
+            action = TorrentDownloadService.ACTION_REMOVE
+            putExtra(TorrentDownloadService.EXTRA_HASH, infoHash)
+        }
+        context.startService(intent)
     }
 }
