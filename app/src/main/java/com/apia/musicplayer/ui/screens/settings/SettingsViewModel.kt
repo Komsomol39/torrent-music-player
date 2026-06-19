@@ -1,16 +1,13 @@
 package com.apia.musicplayer.ui.screens.settings
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
-import com.apia.musicplayer.data.search.RuTrackerProvider
-import com.apia.musicplayer.data.search.SearchAggregator
-import com.apia.musicplayer.data.search.VkMusicProvider
-import com.apia.musicplayer.data.search.YouTubeProvider
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.apia.musicplayer.data.search.*
 import com.apia.musicplayer.domain.model.SearchSource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -18,12 +15,9 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class SettingsState(
-    val enabledSources: Set<SearchSource> = setOf(SearchSource.RUTOR, SearchSource.TPB, SearchSource.NYAA),
-    val rutrackerLogin: String = "",
-    val rutrackerPassword: String = "",
-    val rutrackerLoggedIn: Boolean = false,
-    val vkToken: String = "",
-    val youtubeApiKey: String = "",
+    val enabledSources: Set<SearchSource> = SearchSource.DEFAULT_ENABLED,
+    val credentials: Map<String, String> = emptyMap(),
+    val loginStatus: Map<String, Boolean> = emptyMap(),
     val isSaving: Boolean = false
 )
 
@@ -32,16 +26,18 @@ class SettingsViewModel @Inject constructor(
     private val dataStore: DataStore<Preferences>,
     private val aggregator: SearchAggregator,
     private val rutracker: RuTrackerProvider,
+    private val kinozal: KinozalProvider,
+    private val nnmclub: NnmClubProvider,
     private val vk: VkMusicProvider,
-    private val youtube: YouTubeProvider
+    private val youtube: YouTubeProvider,
+    private val soundcloud: SoundCloudProvider,
+    private val deezer: DeezerProvider,
+    private val yandex: YandexMusicProvider,
+    private val jamendo: JamendoProvider
 ) : ViewModel() {
 
     companion object {
-        val KEY_ENABLED_SOURCES = stringSetPreferencesKey("enabled_sources")
-        val KEY_RUTRACKER_LOGIN = stringPreferencesKey("rutracker_login")
-        val KEY_RUTRACKER_PASS  = stringPreferencesKey("rutracker_pass")
-        val KEY_VK_TOKEN        = stringPreferencesKey("vk_token")
-        val KEY_YT_KEY          = stringPreferencesKey("yt_api_key")
+        val KEY_SOURCES = stringSetPreferencesKey("enabled_sources")
     }
 
     private val _state = MutableStateFlow(SettingsState())
@@ -50,57 +46,84 @@ class SettingsViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             dataStore.data.first().let { prefs ->
-                val sources = prefs[KEY_ENABLED_SOURCES]
+                // Загружаем включённые источники
+                val sources = prefs[KEY_SOURCES]
                     ?.mapNotNull { runCatching { SearchSource.valueOf(it) }.getOrNull() }
-                    ?.toSet() ?: setOf(SearchSource.RUTOR, SearchSource.TPB, SearchSource.NYAA)
-                _state.update { it.copy(
-                    enabledSources = sources,
-                    rutrackerLogin = prefs[KEY_RUTRACKER_LOGIN] ?: "",
-                    vkToken = prefs[KEY_VK_TOKEN] ?: "",
-                    youtubeApiKey = prefs[KEY_YT_KEY] ?: ""
-                )}
-                // Применяем сохранённые токены
-                vk.token = prefs[KEY_VK_TOKEN] ?: ""
-                youtube.apiKey = prefs[KEY_YT_KEY] ?: ""
+                    ?.toSet() ?: SearchSource.DEFAULT_ENABLED
+
+                // Загружаем все credentials
+                val creds = mutableMapOf<String, String>()
+                SearchSource.ALL_SOURCES.forEach { info ->
+                    val s = info.source
+                    listOf("${s.name}_login", "${s.name}_pass", "${s.name}_token").forEach { key ->
+                        prefs[stringPreferencesKey(key)]?.let { creds[key] = it }
+                    }
+                }
+
+                _state.update { it.copy(enabledSources = sources, credentials = creds) }
                 aggregator.enabledSources.clear()
                 aggregator.enabledSources.addAll(sources)
+                applyCredentials(creds)
             }
         }
     }
 
     fun toggleSource(source: SearchSource, enabled: Boolean) {
         _state.update { s ->
-            val newSources = if (enabled) s.enabledSources + source else s.enabledSources - source
+            val new = if (enabled) s.enabledSources + source else s.enabledSources - source
             aggregator.enabledSources.clear()
-            aggregator.enabledSources.addAll(newSources)
-            s.copy(enabledSources = newSources)
+            aggregator.enabledSources.addAll(new)
+            s.copy(enabledSources = new)
         }
     }
 
-    fun setRutrackerLogin(v: String) = _state.update { it.copy(rutrackerLogin = v) }
-    fun setRutrackerPassword(v: String) = _state.update { it.copy(rutrackerPassword = v) }
-    fun setVkToken(v: String) = _state.update { it.copy(vkToken = v) }
-    fun setYoutubeApiKey(v: String) = _state.update { it.copy(youtubeApiKey = v) }
+    fun setCredential(key: String, value: String) {
+        _state.update { it.copy(credentials = it.credentials + (key to value)) }
+    }
 
-    fun loginRutracker() {
+    fun login(source: SearchSource) {
         viewModelScope.launch {
-            val ok = rutracker.login(state.value.rutrackerLogin, state.value.rutrackerPassword)
-            _state.update { it.copy(rutrackerLoggedIn = ok) }
+            val creds = state.value.credentials
+            val ok = when (source) {
+                SearchSource.RUTRACKER -> rutracker.login(
+                    creds["${source.name}_login"] ?: "",
+                    creds["${source.name}_pass"] ?: ""
+                )
+                SearchSource.KINOZAL -> kinozal.login(
+                    creds["${source.name}_login"] ?: "",
+                    creds["${source.name}_pass"] ?: ""
+                )
+                SearchSource.NNMCLUB -> nnmclub.login(
+                    creds["${source.name}_login"] ?: "",
+                    creds["${source.name}_pass"] ?: ""
+                )
+                else -> false
+            }
+            _state.update { it.copy(loginStatus = it.loginStatus + (source.name to ok)) }
         }
     }
 
     fun saveSettings() {
         viewModelScope.launch {
+            _state.update { it.copy(isSaving = true) }
             val s = state.value
             dataStore.edit { prefs ->
-                prefs[KEY_ENABLED_SOURCES] = s.enabledSources.map { it.name }.toSet()
-                prefs[KEY_RUTRACKER_LOGIN] = s.rutrackerLogin
-                prefs[KEY_RUTRACKER_PASS]  = s.rutrackerPassword
-                prefs[KEY_VK_TOKEN]        = s.vkToken
-                prefs[KEY_YT_KEY]          = s.youtubeApiKey
+                prefs[KEY_SOURCES] = s.enabledSources.map { it.name }.toSet()
+                s.credentials.forEach { (key, value) ->
+                    prefs[stringPreferencesKey(key)] = value
+                }
             }
-            vk.token = s.vkToken
-            youtube.apiKey = s.youtubeApiKey
+            applyCredentials(s.credentials)
+            _state.update { it.copy(isSaving = false) }
         }
+    }
+
+    private fun applyCredentials(creds: Map<String, String>) {
+        vk.token         = creds["${SearchSource.VK.name}_token"] ?: ""
+        youtube.apiKey   = creds["${SearchSource.YOUTUBE.name}_token"] ?: ""
+        soundcloud.clientId = creds["${SearchSource.SOUNDCLOUD.name}_token"] ?: ""
+        deezer.arlToken  = creds["${SearchSource.DEEZER.name}_token"] ?: ""
+        yandex.token     = creds["${SearchSource.YANDEX.name}_token"] ?: ""
+        jamendo.apiKey   = creds["${SearchSource.JAMENDO.name}_token"] ?: ""
     }
 }
