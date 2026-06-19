@@ -38,9 +38,9 @@ class TorrentEngine @Inject constructor(
     private val sessionManager = SessionManager()
     private val _torrents = MutableStateFlow<Map<String, TorrentState>>(emptyMap())
     val torrents: StateFlow<Map<String, TorrentState>> = _torrents.asStateFlow()
-    private val handleMap = mutableMapOf<String, TorrentHandle>()
 
     val downloadDir: File = File(context.getExternalFilesDir(null), "Music").also { it.mkdirs() }
+    private val tmpDir: File = File(context.cacheDir, "torrent_tmp").also { it.mkdirs() }
 
     init {
         setupAlertListener()
@@ -62,11 +62,10 @@ class TorrentEngine @Inject constructor(
                         val handle = a.handle()
                         handle.resume()
                         val hash = handle.infoHash().toHex()
-                        handleMap[hash] = handle
                         _torrents.update { map ->
                             map + (hash to TorrentState(
                                 infoHash = hash,
-                                name = try { handle.status().name() } catch (e: Exception) { "Loading..." },
+                                name = try { handle.status().name().ifBlank { "Loading..." } } catch (e: Exception) { "Loading..." },
                                 status = TorrentStatus.QUEUED
                             ))
                         }
@@ -84,10 +83,9 @@ class TorrentEngine @Inject constructor(
                     AlertType.TORRENT_ERROR -> {
                         val a = alert as TorrentErrorAlert
                         val hash = a.handle().infoHash().toHex()
-                        val errMsg = a.error().message   // поле, не метод
                         _torrents.update { map ->
                             val cur = map[hash] ?: return@update map
-                            map + (hash to cur.copy(status = TorrentStatus.ERROR, error = errMsg))
+                            map + (hash to cur.copy(status = TorrentStatus.ERROR, error = a.error().message))
                         }
                     }
 
@@ -119,21 +117,37 @@ class TorrentEngine @Inject constructor(
         })
     }
 
+    /**
+     * Добавить magnet-ссылку.
+     * fetchMagnet получает метаданные (до 30 сек), затем начинает загрузку.
+     * Выполнять в IO dispatcher — блокирующий вызов.
+     */
     fun addMagnet(magnetUri: String): String {
-        // SessionManager.download(magnetUri, saveDir) — правильный вызов
-        sessionManager.download(magnetUri, downloadDir)
-        return magnetUri
-            .substringAfter("xt=urn:btih:", "")
-            .substringBefore("&")
-            .lowercase()
-            .ifBlank { magnetUri.hashCode().toString() }
+        // fetchMagnet(magnet, timeoutSec, saveDir) → byte[] метаданных
+        val data = sessionManager.fetchMagnet(magnetUri, 30, tmpDir)
+        return if (data != null) {
+            val ti = TorrentInfo.bdecode(data)
+            sessionManager.download(ti, downloadDir)
+            ti.infoHashV1().toHex()
+        } else {
+            // Fallback: добавляем через TorrentBuilder без метаданных
+            // (метаданные будут получены от peers)
+            val builder = TorrentBuilder()
+            builder.magnetUri(magnetUri)
+            builder.savePath(downloadDir.absolutePath)
+            sessionManager.swig().async_add_torrent(builder.build().swig())
+            magnetUri
+                .substringAfter("xt=urn:btih:", "")
+                .substringBefore("&")
+                .lowercase()
+                .ifBlank { magnetUri.hashCode().toString() }
+        }
     }
 
     fun prioritizeAudioFiles(infoHash: String) {
-        val handle = handleMap[infoHash] ?: return
+        val handle = findHandle(infoHash) ?: return
         val info = handle.torrentFile() ?: return
         val audioExts = setOf("mp3", "flac", "m4a", "ogg", "opus", "wav", "aac")
-        // Priority.TWO = высокий приоритет (0=ignore, 1=normal, 2..7=высокий)
         val priorities = Array(info.numFiles()) { Priority.IGNORE }
         for (i in 0 until info.numFiles()) {
             val name = info.files().fileName(i).lowercase()
@@ -145,7 +159,7 @@ class TorrentEngine @Inject constructor(
     }
 
     fun getAudioFiles(infoHash: String): List<File> {
-        val handle = handleMap[infoHash] ?: return emptyList()
+        val handle = findHandle(infoHash) ?: return emptyList()
         val info = handle.torrentFile() ?: return emptyList()
         val audioExts = setOf("mp3", "flac", "m4a", "ogg", "opus", "wav", "aac")
         return (0 until info.numFiles())
@@ -155,24 +169,25 @@ class TorrentEngine @Inject constructor(
     }
 
     fun pause(infoHash: String) {
-        handleMap[infoHash]?.pause()
+        findHandle(infoHash)?.pause()
         _torrents.update { map ->
             val cur = map[infoHash] ?: return@update map
             map + (infoHash to cur.copy(status = TorrentStatus.PAUSED))
         }
     }
 
-    fun resume(infoHash: String) = handleMap[infoHash]?.resume()
+    fun resume(infoHash: String) = findHandle(infoHash)?.resume()
 
-    fun remove(infoHash: String, deleteFiles: Boolean = false) {
-        val handle = handleMap[infoHash] ?: return
-        // remove без флага удаления — просто убираем из сессии
+    fun remove(infoHash: String) {
+        val handle = findHandle(infoHash) ?: return
         sessionManager.remove(handle)
-        handleMap.remove(infoHash)
         _torrents.update { it - infoHash }
     }
 
     fun getTorrentState(infoHash: String): TorrentState? = _torrents.value[infoHash]
+
+    private fun findHandle(infoHash: String): TorrentHandle? =
+        try { sessionManager.find(Sha1Hash(infoHash)) } catch (e: Exception) { null }
 
     fun stop() = sessionManager.stop()
 }
