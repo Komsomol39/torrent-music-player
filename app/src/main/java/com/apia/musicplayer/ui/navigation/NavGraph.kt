@@ -8,6 +8,7 @@ import com.apia.musicplayer.ui.screens.equalizer.EqualizerScreen
 import com.apia.musicplayer.ui.screens.library.LibraryScreen
 import com.apia.musicplayer.ui.screens.player.PlayerScreen
 import com.apia.musicplayer.ui.screens.search.SearchScreen
+import com.apia.musicplayer.ui.screens.settings.SettingsScreen
 import com.apia.musicplayer.ui.screens.torrent.TorrentDownloadsScreen
 import com.apia.musicplayer.ui.screens.torrent.TorrentSearchScreen
 
@@ -18,11 +19,12 @@ sealed class Screen(val route: String) {
     object Torrent   : Screen("torrent")
     object Downloads : Screen("downloads")
     object Equalizer : Screen("equalizer")
+    object Settings  : Screen("settings")
 }
 
 @Composable
 fun MusicNavGraph(navController: NavHostController) {
-    NavHost(navController = navController, startDestination = Screen.Library.route) {
+    NavHost(navController, startDestination = Screen.Library.route) {
         composable(Screen.Library.route) {
             LibraryScreen(onTrackClick = { navController.navigate(Screen.Player.route) })
         }
@@ -35,14 +37,9 @@ fun MusicNavGraph(navController: NavHostController) {
         composable(Screen.Search.route) {
             SearchScreen(onTrackClick = { navController.navigate(Screen.Player.route) })
         }
-        composable(Screen.Torrent.route) {
-            TorrentSearchScreen()
-        }
-        composable(Screen.Downloads.route) {
-            TorrentDownloadsScreen()
-        }
-        composable(Screen.Equalizer.route) {
-            EqualizerScreen()
-        }
+        composable(Screen.Torrent.route) { TorrentSearchScreen() }
+        composable(Screen.Downloads.route) { TorrentDownloadsScreen() }
+        composable(Screen.Equalizer.route) { EqualizerScreen() }
+        composable(Screen.Settings.route) { SettingsScreen() }
     }
 }
