@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import org.libtorrent4j.*
 import org.libtorrent4j.alerts.*
-import org.libtorrent4j.swig.settings_pack
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -43,79 +42,82 @@ class TorrentEngine @Inject constructor(
     val downloadDir: File = File(context.getExternalFilesDir(null), "Music").also { it.mkdirs() }
 
     init {
+        setupAlertListener()
+        val sp = SettingsPack()
+        sp.activeTorrents(10)
+        sp.activeDownloads(5)
+        sp.connectionsLimit(200)
+        sessionManager.start(SessionParams(sp))
+        sessionManager.addDhtRouter("router.bittorrent.com", 6881)
+        sessionManager.addDhtRouter("router.utorrent.com", 6881)
+    }
+
+    private fun setupAlertListener() {
         sessionManager.addListener(object : AlertListener {
             override fun types(): IntArray? = null
 
             override fun alert(alert: Alert<*>) {
                 when (alert.type()) {
-                    AlertType.ADD_TORRENT -> {
-                        val a = alert as AddTorrentAlert
+                    AlertType.TORRENT_ADDED -> {
+                        val a = alert as TorrentAddedAlert
                         val h = a.handle()
-                        if (!h.isValid) return
-                        val hash = h.infoHash().toHex()
-                        // TorrentHandle.status() возвращает TorrentStatus объект
-                        val st = h.status()
+                        val hash = h.infoHash().toString()
                         _torrents.update { map ->
                             map + (hash to TorrentState(
                                 infoHash = hash,
-                                name = st.name(),
+                                name = try { h.status().name() } catch (e: Exception) { "Loading..." },
                                 status = TorrentStatus.QUEUED,
-                                savePath = st.savePath()    // метод у TorrentStatus
+                                savePath = downloadDir.absolutePath
                             ))
                         }
                     }
+
                     AlertType.STATE_UPDATE -> {
+                        val a = alert as StateUpdateAlert
                         val updates = mutableMapOf<String, TorrentState>()
-                        for (st in (alert as StateUpdateAlert).status()) {
-                            // st — это org.libtorrent4j.TorrentStatus
-                            val hash = st.infoHash().toHex()
+                        for (st in a.status()) {
+                            val hash = st.infoHash().toString()
                             updates[hash] = TorrentState(
                                 infoHash = hash,
-                                name = st.name(),
+                                name = st.name().ifBlank { "Loading..." },
                                 progress = st.progress(),
                                 downloadSpeed = st.downloadPayloadRate().toLong(),
                                 uploadSpeed = st.uploadPayloadRate().toLong(),
                                 seeders = st.numSeeds(),
                                 peers = st.numPeers(),
-                                status = mapLibtorrentState(st.state()),
-                                savePath = st.savePath(),
+                                status = mapState(st.state()),
+                                savePath = downloadDir.absolutePath,
                                 totalBytes = st.totalWanted(),
                                 downloadedBytes = st.totalWantedDone()
                             )
                         }
-                        if (updates.isNotEmpty()) _torrents.update { it + updates }
+                        if (updates.isNotEmpty()) {
+                            _torrents.update { map -> map + updates }
+                        }
                     }
+
                     AlertType.TORRENT_FINISHED -> {
-                        val hash = (alert as TorrentFinishedAlert).handle().infoHash().toHex()
+                        val a = alert as TorrentFinishedAlert
+                        val hash = a.handle().infoHash().toString()
                         _torrents.update { map ->
                             val cur = map[hash] ?: return@update map
                             map + (hash to cur.copy(status = TorrentStatus.FINISHED, progress = 1f))
                         }
                     }
+
                     AlertType.TORRENT_ERROR -> {
                         val a = alert as TorrentErrorAlert
-                        val hash = a.handle().infoHash().toHex()
-                        // error() возвращает ErrorCode, message — String property
-                        val errMsg = a.error().message()
+                        val hash = a.handle().infoHash().toString()
                         _torrents.update { map ->
                             val cur = map[hash] ?: return@update map
-                            map + (hash to cur.copy(status = TorrentStatus.ERROR, error = errMsg))
+                            map + (hash to cur.copy(status = TorrentStatus.ERROR, error = a.error().message))
                         }
                     }
+
                     else -> {}
                 }
             }
         })
-
-        val sp = SettingsPack()
-        // Используем swig int_types для настройки
-        sp.setInteger(settings_pack.int_types.active_downloads.swigValue(), 5)
-        sp.setInteger(settings_pack.int_types.active_seeds.swigValue(), 3)
-        sp.setInteger(settings_pack.int_types.connections_limit.swigValue(), 200)
-        sp.setInteger(settings_pack.int_types.upload_rate_limit.swigValue(), 0)
-        sp.setInteger(settings_pack.int_types.download_rate_limit.swigValue(), 0)
-
-        sessionManager.start(SessionParams(sp))
     }
 
     fun addMagnet(magnetUri: String): String {
@@ -124,72 +126,63 @@ class TorrentEngine @Inject constructor(
             .substringAfter("xt=urn:btih:", "")
             .substringBefore("&")
             .lowercase()
-            .ifEmpty { magnetUri.hashCode().toString() }
+            .ifBlank { magnetUri.hashCode().toString() }
     }
 
     fun prioritizeAudioFiles(infoHash: String) {
-        val handle = findHandle(infoHash) ?: return
+        val handle = getHandle(infoHash) ?: return
         val info = handle.torrentFile() ?: return
-        val audioExts = setOf("mp3", "flac", "m4a", "ogg", "opus", "wav", "aac", "wma")
+        val audioExts = setOf("mp3", "flac", "m4a", "ogg", "opus", "wav", "aac")
         val priorities = Array(info.numFiles()) { Priority.IGNORE }
         for (i in 0 until info.numFiles()) {
             val name = info.files().fileName(i).lowercase()
             if (audioExts.any { name.endsWith(".$it") }) {
-                priorities[i] = Priority.DEFAULT
+                priorities[i] = Priority.SEVEN
             }
         }
         handle.prioritizeFiles(priorities)
     }
 
     fun getAudioFiles(infoHash: String): List<File> {
-        val handle = findHandle(infoHash) ?: return emptyList()
+        val handle = getHandle(infoHash) ?: return emptyList()
         val info = handle.torrentFile() ?: return emptyList()
-        val audioExts = setOf("mp3", "flac", "m4a", "ogg", "opus", "wav", "aac", "wma")
-        val savePath = File(handle.savePath())
-        val result = mutableListOf<File>()
-        for (i in 0 until info.numFiles()) {
-            val path = info.files().filePath(i)
-            if (audioExts.any { path.lowercase().endsWith(".$it") }) {
-                result += File(savePath, path)
-            }
-        }
-        return result
+        val audioExts = setOf("mp3", "flac", "m4a", "ogg", "opus", "wav", "aac")
+        return (0 until info.numFiles())
+            .map { info.files().filePath(it) }
+            .filter { path -> audioExts.any { path.lowercase().endsWith(".$it") } }
+            .map { File(downloadDir, it) }
     }
 
     fun pause(infoHash: String) {
-        findHandle(infoHash)?.pause()
+        getHandle(infoHash)?.pause()
         _torrents.update { map ->
             val cur = map[infoHash] ?: return@update map
             map + (infoHash to cur.copy(status = TorrentStatus.PAUSED))
         }
     }
 
-    fun resume(infoHash: String) = findHandle(infoHash)?.resume()
+    fun resume(infoHash: String) = getHandle(infoHash)?.resume()
 
     fun remove(infoHash: String, deleteFiles: Boolean = false) {
-        val handle = findHandle(infoHash) ?: return
-        if (deleteFiles) sessionManager.remove(handle, SessionHandle.DELETE_FILES)
-        else sessionManager.remove(handle)
+        val handle = getHandle(infoHash) ?: return
+        sessionManager.remove(handle, if (deleteFiles) SessionHandle.DELETE_FILES else 0)
         _torrents.update { it - infoHash }
     }
 
     fun getTorrentState(infoHash: String): TorrentState? = _torrents.value[infoHash]
 
-    // Sha1Hash принимает строку hex напрямую в конструкторе
-    private fun findHandle(infoHash: String): TorrentHandle? = try {
-        sessionManager.find(Sha1Hash(infoHash))
-    } catch (e: Exception) { null }
+    private fun getHandle(infoHash: String): TorrentHandle? =
+        sessionManager.handles().firstOrNull { it.infoHash().toString() == infoHash }
 
-    private fun mapLibtorrentState(state: org.libtorrent4j.TorrentStatus.State): TorrentStatus =
-        when (state) {
-            org.libtorrent4j.TorrentStatus.State.CHECKING_FILES,
-            org.libtorrent4j.TorrentStatus.State.CHECKING_RESUME_DATA -> TorrentStatus.CHECKING
-            org.libtorrent4j.TorrentStatus.State.DOWNLOADING_METADATA,
-            org.libtorrent4j.TorrentStatus.State.DOWNLOADING -> TorrentStatus.DOWNLOADING
-            org.libtorrent4j.TorrentStatus.State.FINISHED,
-            org.libtorrent4j.TorrentStatus.State.SEEDING -> TorrentStatus.SEEDING
-            else -> TorrentStatus.QUEUED
-        }
+    private fun mapState(state: org.libtorrent4j.TorrentStatus.State?): TorrentStatus = when (state) {
+        org.libtorrent4j.TorrentStatus.State.CHECKING_FILES,
+        org.libtorrent4j.TorrentStatus.State.CHECKING_RESUME_DATA -> TorrentStatus.CHECKING
+        org.libtorrent4j.TorrentStatus.State.DOWNLOADING_METADATA,
+        org.libtorrent4j.TorrentStatus.State.DOWNLOADING -> TorrentStatus.DOWNLOADING
+        org.libtorrent4j.TorrentStatus.State.FINISHED,
+        org.libtorrent4j.TorrentStatus.State.SEEDING -> TorrentStatus.SEEDING
+        else -> TorrentStatus.QUEUED
+    }
 
     fun stop() = sessionManager.stop()
 }
