@@ -8,9 +8,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.apia.musicplayer.ui.components.MiniPlayer
 import com.apia.musicplayer.ui.navigation.MusicNavGraph
 import com.apia.musicplayer.ui.navigation.Screen
+import com.apia.musicplayer.ui.components.MiniPlayer
 
 @Composable
 fun MusicPlayerApp() {
