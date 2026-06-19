@@ -12,7 +12,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -29,15 +28,13 @@ fun TorrentSearchScreen(viewModel: TorrentViewModel = hiltViewModel()) {
     val isLoading by viewModel.isLoading.collectAsState()
     val sourceStatuses by viewModel.sourceStatuses.collectAsState()
     val downloads by viewModel.downloads.collectAsState()
+    val playingId by viewModel.playingId.collectAsState()
     val enabledSources = viewModel.enabledSources
 
     Column(modifier = Modifier.fillMaxSize()) {
-
         // Search bar
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             OutlinedTextField(
@@ -56,14 +53,11 @@ fun TorrentSearchScreen(viewModel: TorrentViewModel = hiltViewModel()) {
                 onClick = { viewModel.search() },
                 enabled = query.isNotBlank() && !isLoading
             ) {
-                if (isLoading)
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                else
-                    Icon(Icons.Default.Search, "Search")
+                if (isLoading) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                else Icon(Icons.Default.Search, "Search")
             }
         }
 
-        // Нет источников
         if (enabledSources.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -75,7 +69,7 @@ fun TorrentSearchScreen(viewModel: TorrentViewModel = hiltViewModel()) {
             return
         }
 
-        // Статус источников (показываем только после нажатия поиска)
+        // Source chips
         if (sourceStatuses.isNotEmpty()) {
             LazyRow(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
@@ -88,26 +82,14 @@ fun TorrentSearchScreen(viewModel: TorrentViewModel = hiltViewModel()) {
             Spacer(Modifier.height(4.dp))
         }
 
-        // Результаты
         when {
             results.isEmpty() && !isLoading && sourceStatuses.isNotEmpty() -> {
-                // Показываем ошибки если все источники провалились
-                val errors = sourceStatuses.filter { it.value.error != null }
+                val errCount = sourceStatuses.count { it.value.error != null }
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.padding(24.dp)
-                    ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(24.dp)) {
                         Icon(Icons.Default.SearchOff, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text("No results found", style = MaterialTheme.typography.titleMedium)
-                        if (errors.isNotEmpty()) {
-                            Text(
-                                "${errors.size} sources failed. Check Settings → connection status.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                        if (errCount > 0) Text("$errCount sources had errors — check Settings", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -116,8 +98,8 @@ fun TorrentSearchScreen(viewModel: TorrentViewModel = hiltViewModel()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Icon(Icons.Default.MusicNote, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("Search across ${enabledSources.size} sources", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("TPB, Nyaa, Archive.org work without login", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("${enabledSources.size} sources ready", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("TPB, Nyaa, Archive.org — no login needed", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -128,23 +110,22 @@ fun TorrentSearchScreen(viewModel: TorrentViewModel = hiltViewModel()) {
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 item {
-                    val total = sourceStatuses.values.sumOf { it.resultCount }
                     val loading = sourceStatuses.values.count { it.loading }
                     Text(
-                        "${results.size} results" + if (loading > 0) " • $loading sources loading..." else "",
+                        "${results.size} results" + if (loading > 0) " • $loading loading..." else "",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(vertical = 4.dp)
                     )
                 }
                 items(results, key = { it.id }) { result ->
-                    val isDownloading = downloads.values.any {
-                        it.name.contains(result.title.take(15), ignoreCase = true)
-                    }
+                    val isDownloading = downloads.values.any { it.name.contains(result.title.take(15), ignoreCase = true) }
+                    val isPlayingThis = playingId == result.id
                     TorrentResultItem(
                         result = result,
                         isDownloading = isDownloading,
-                        onDownload = { viewModel.download(result) }
+                        isPlaying = isPlayingThis,
+                        onAction = { viewModel.playOrDownload(result) }
                     )
                 }
             }
@@ -154,55 +135,21 @@ fun TorrentSearchScreen(viewModel: TorrentViewModel = hiltViewModel()) {
 
 @Composable
 fun SourceChip(source: SearchSource, status: SourceStatus) {
-    val containerColor = when {
-        status.loading -> MaterialTheme.colorScheme.surfaceVariant
-        status.error != null -> MaterialTheme.colorScheme.errorContainer
-        status.resultCount > 0 -> MaterialTheme.colorScheme.primaryContainer
-        else -> MaterialTheme.colorScheme.surfaceVariant
+    val (bg, fg) = when {
+        status.loading -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
+        status.error != null -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
+        status.resultCount > 0 -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+        else -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
     }
-    val contentColor = when {
-        status.error != null -> MaterialTheme.colorScheme.onErrorContainer
-        status.resultCount > 0 -> MaterialTheme.colorScheme.onPrimaryContainer
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-
-    Surface(
-        shape = MaterialTheme.shapes.small,
-        color = containerColor,
-        modifier = Modifier.height(28.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
+    Surface(shape = MaterialTheme.shapes.small, color = bg, modifier = Modifier.height(28.dp)) {
+        Row(modifier = Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(source.meta.emoji, style = MaterialTheme.typography.labelSmall)
-            Text(
-                source.meta.displayName,
-                style = MaterialTheme.typography.labelSmall,
-                color = contentColor
-            )
+            Text(source.meta.displayName, style = MaterialTheme.typography.labelSmall, color = fg)
             when {
-                status.loading -> CircularProgressIndicator(
-                    modifier = Modifier.size(10.dp),
-                    strokeWidth = 1.5.dp,
-                    color = contentColor
-                )
-                status.error != null -> Icon(
-                    Icons.Default.Error, null,
-                    tint = contentColor,
-                    modifier = Modifier.size(12.dp)
-                )
-                status.resultCount > 0 -> Text(
-                    "${status.resultCount}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = contentColor
-                )
-                else -> Icon(
-                    Icons.Default.Remove, null,
-                    tint = contentColor,
-                    modifier = Modifier.size(12.dp)
-                )
+                status.loading -> CircularProgressIndicator(modifier = Modifier.size(10.dp), strokeWidth = 1.5.dp, color = fg)
+                status.error != null -> Icon(Icons.Default.Error, null, tint = fg, modifier = Modifier.size(12.dp))
+                status.resultCount > 0 -> Text("${status.resultCount}", style = MaterialTheme.typography.labelSmall, color = fg)
+                else -> Icon(Icons.Default.Remove, null, tint = fg, modifier = Modifier.size(12.dp))
             }
         }
     }
@@ -212,46 +159,35 @@ fun SourceChip(source: SearchSource, status: SourceStatus) {
 fun TorrentResultItem(
     result: TorrentResult,
     isDownloading: Boolean = false,
-    onDownload: () -> Unit
+    isPlaying: Boolean = false,
+    onAction: () -> Unit
 ) {
     val isDirect = result.magnetLink.startsWith("http") && !result.magnetLink.contains("magnet:?")
-
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(40.dp)
-            ) {
+            Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(40.dp)) {
                 Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        result.source.take(3).uppercase(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                    Text(result.source.take(3).uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
             }
             Spacer(Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(result.title, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                if (result.artist != null) {
-                    Text(result.artist, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
+                if (result.artist != null) Text(result.artist, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (result.sizeBytes > 1024) Text(result.sizeBytes.formatSize(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (result.seeders > 0) Text("S:${result.seeders}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                     Text(result.source, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-                    if (isDirect) Text("STREAM", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
+                    if (isDirect) Text("▶ STREAM", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
                 }
             }
-            if (isDownloading) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-            } else {
-                IconButton(onClick = onDownload) {
+            when {
+                isPlaying || isDownloading -> CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                else -> IconButton(onClick = onAction) {
                     Icon(
-                        if (isDirect) Icons.Default.PlayArrow else Icons.Default.Download,
+                        if (isDirect) Icons.Default.PlayCircle else Icons.Default.Download,
                         if (isDirect) "Play" else "Download",
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = if (isDirect) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
