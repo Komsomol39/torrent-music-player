@@ -1,6 +1,8 @@
 package com.apia.musicplayer.data.search
+
 import com.apia.musicplayer.domain.model.TorrentResult
-import okhttp3.*
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -8,31 +10,29 @@ import javax.inject.Singleton
 @Singleton
 class DeezerProvider @Inject constructor(private val client: OkHttpClient) : SearchProvider {
     override val name = "Deezer"
-    var arlToken: String = ""
+    var arlCookie: String = ""
 
     override suspend fun search(query: String): List<TorrentResult> {
-        val enc = java.net.URLEncoder.encode(query, "UTF-8")
+        val encoded = java.net.URLEncoder.encode(query, "UTF-8")
+        val json = get("https://api.deezer.com/search?q=$encoded&limit=25") ?: return emptyList()
         return try {
-            val reqBuilder = Request.Builder()
-                .url("https://api.deezer.com/search/track?q=$enc&limit=25")
-                .header("User-Agent", "Mozilla/5.0")
-            if (arlToken.isNotBlank()) reqBuilder.header("Cookie", "arl=$arlToken")
-            val json = client.newCall(reqBuilder.build()).execute().use { it.body?.string() ?: "" }
-            val data = JSONObject(json).getJSONArray("data")
-            (0 until data.length()).map { i ->
-                val t = data.getJSONObject(i)
-                TorrentResult(
-                    id = "deezer_${t.getLong("id")}",
-                    title = t.getString("title"),
-                    artist = t.getJSONObject("artist").getString("name"),
-                    album = t.getJSONObject("album").getString("title"),
-                    year = null,
-                    seeders = 0, leechers = 0,
-                    sizeBytes = t.optLong("duration") * 1000,
-                    magnetLink = t.optString("preview", ""),
-                    source = "Deezer"
-                )
-            }.filter { it.magnetLink.isNotBlank() }
+            val items = JSONObject(json).getJSONArray("data")
+            (0 until items.length()).map { i ->
+                val t = items.getJSONObject(i)
+                val preview = t.optString("preview","")
+                TorrentResult("deezer_${t.optLong("id")}",
+                    t.optString("title",""),
+                    t.optJSONObject("artist")?.optString("name"),
+                    t.optJSONObject("album")?.optString("title"),
+                    null, t.optInt("rank",0)/10000, 0,
+                    t.optLong("duration",0)*1000, preview, "Deezer")
+            }
         } catch (e: Exception) { emptyList() }
     }
+
+    private fun get(url: String) = try {
+        val rb = Request.Builder().url(url).header("User-Agent","Mozilla/5.0")
+        if (arlCookie.isNotBlank()) rb.header("Cookie","arl=$arlCookie")
+        client.newCall(rb.build()).execute().use { it.body?.string() }
+    } catch (e: Exception) { null }
 }
