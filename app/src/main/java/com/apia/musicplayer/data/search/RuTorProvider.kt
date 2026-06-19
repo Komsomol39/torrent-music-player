@@ -9,60 +9,70 @@ import javax.inject.Singleton
 
 @Singleton
 class RuTorProvider @Inject constructor(private val client: OkHttpClient) : SearchProvider {
-
     override val name = "RuTor"
-    private val baseUrl = "https://rutor.info"
+    // Попробуем несколько зеркал
+    private val mirrors = listOf(
+        "https://rutor.info",
+        "https://rutor.is",
+        "https://rutor.top"
+    )
 
     override suspend fun search(query: String): List<TorrentResult> {
         val encoded = java.net.URLEncoder.encode(query, "UTF-8")
-        // category 2 = music
-        val html = get("$baseUrl/search/0/2/000/0/$encoded")
+        for (base in mirrors) {
+            try {
+                // category 2 = music
+                val html = get("$base/search/0/2/000/0/$encoded") ?: continue
+                val results = parseResults(html, base)
+                if (results.isNotEmpty()) return results
+            } catch (e: Exception) { continue }
+        }
+        return emptyList()
+    }
+
+    private fun parseResults(html: String, base: String): List<TorrentResult> {
         val doc = Jsoup.parse(html)
-        val results = mutableListOf<TorrentResult>()
+        val rows = doc.select("table#index tr").drop(1)
+        if (rows.isEmpty()) return emptyList()
 
-        doc.select("table#index tr").drop(1).forEach { row ->
-            val titleEl = row.selectFirst("td a[href*='/torrent/']") ?: return@forEach
-            val title   = titleEl.text()
-            val href    = titleEl.attr("href")
-            val magnet  = row.selectFirst("a[href^=magnet:]")?.attr("href") ?: return@forEach
-            val seeders = row.select("td").getOrNull(4)?.text()?.trim()?.toIntOrNull() ?: 0
-            val leechers = row.select("td").getOrNull(5)?.text()?.trim()?.toIntOrNull() ?: 0
-            val size    = row.select("td").getOrNull(3)?.text() ?: ""
-
-            results += TorrentResult(
-                id = "rutor_${href.hashCode()}",
+        return rows.mapNotNull { row ->
+            val cells = row.select("td")
+            if (cells.size < 4) return@mapNotNull null
+            // Название — ищем ссылку на torrent
+            val titleEl = cells.getOrNull(1)?.selectFirst("a") ?: return@mapNotNull null
+            val title = titleEl.text().ifBlank { return@mapNotNull null }
+            // Magnet
+            val magnet = row.selectFirst("a[href^=magnet:]")?.attr("href") ?: return@mapNotNull null
+            val seeders = cells.getOrNull(4)?.text()?.trim()?.toIntOrNull() ?: 0
+            val leechers = cells.getOrNull(5)?.text()?.trim()?.toIntOrNull() ?: 0
+            val size = cells.getOrNull(3)?.text() ?: ""
+            TorrentResult(
+                id = "rutor_${magnet.hashCode()}",
                 title = title,
-                artist = parseArtist(title),
-                album = null,
-                year = parseYear(title),
-                seeders = seeders,
-                leechers = leechers,
+                artist = title.substringBefore(" - ").takeIf { title.contains(" - ") },
+                album = null, year = null,
+                seeders = seeders, leechers = leechers,
                 sizeBytes = parseSize(size),
                 magnetLink = magnet,
                 source = "RuTor"
             )
-        }
-        return results.sortedByDescending { it.seeders }
+        }.sortedByDescending { it.seeders }
     }
 
-    private fun get(url: String): String {
-        val req = Request.Builder().url(url)
-            .header("User-Agent", "Mozilla/5.0 (Android; Mobile)")
-            .build()
-        return client.newCall(req).execute().use { it.body?.string() ?: "" }
-    }
+    private fun get(url: String): String? = try {
+        client.newCall(Request.Builder().url(url)
+            .header("User-Agent","Mozilla/5.0 (Android; Mobile; rv:120.0) Gecko/120.0 Firefox/120.0")
+            .header("Accept-Language","ru-RU,ru;q=0.9")
+            .build())
+            .execute().use { it.body?.string() }
+    } catch (e: Exception) { null }
 
-    private fun parseArtist(title: String): String? {
-        val sep = listOf(" - ", " – ")
-        return sep.firstNotNullOfOrNull { if (title.contains(it)) title.substringBefore(it).trim() else null }
-    }
-    private fun parseYear(title: String) = Regex("\\b(19|20)\\d{2}\\b").find(title)?.value?.toIntOrNull()
     private fun parseSize(s: String): Long {
         val n = Regex("[0-9.]+").find(s)?.value?.toDoubleOrNull() ?: return 0
         return when {
-            s.contains("GB", true) -> (n * 1_073_741_824).toLong()
-            s.contains("MB", true) -> (n * 1_048_576).toLong()
-            else -> (n * 1024).toLong()
+            s.contains("GB",true) -> (n*1_073_741_824).toLong()
+            s.contains("MB",true) -> (n*1_048_576).toLong()
+            else -> (n*1024).toLong()
         }
     }
 }
