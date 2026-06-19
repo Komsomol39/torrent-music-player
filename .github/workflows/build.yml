@@ -36,15 +36,9 @@ jobs:
       - name: Build debug APK
         id: build
         run: |
-          gradle assembleDebug --stacktrace --no-daemon > build-output.txt 2>&1 || true
-          # Извлекаем только ошибки компилятора и exception
-          grep -E "^e:|error:|Exception|Caused by:|FAILED|unresolved reference|None of the following candidates" build-output.txt | head -50 > build-errors.txt || true
-          # Если нет явных ошибок — берём последние 80 строк
-          if [ ! -s build-errors.txt ]; then
-            tail -80 build-output.txt > build-errors.txt
-          fi
-          cat build-errors.txt
-          # Проверяем успех
+          gradle assembleDebug --no-daemon > build-output.txt 2>&1 || true
+          # Все строки с ошибками компилятора (e: путь:строка:столбец сообщение)
+          grep -n "^e: \|^w: \|FAILED\|Exception\|error:" build-output.txt > build-errors.txt || true
           if grep -q "BUILD SUCCESSFUL" build-output.txt; then
             echo "build_ok=true" >> $GITHUB_OUTPUT
           else
@@ -53,13 +47,12 @@ jobs:
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
 
-      - name: Save errors to repo
-        if: steps.build.outputs.build_ok == 'false'
+      - name: Save errors
         run: |
           git config user.email "ci@build.bot"
           git config user.name "Build Bot"
           git add build-errors.txt
-          git diff --staged --quiet || git commit -m "ci: build errors #${{ github.run_number }}"
+          git diff --staged --quiet || git commit -m "ci: errors #${{ github.run_number }}"
           git push
 
       - name: Upload APK
@@ -72,6 +65,4 @@ jobs:
 
       - name: Fail if build failed
         if: steps.build.outputs.build_ok == 'false'
-        run: |
-          echo "Build failed. See build-errors.txt in repo."
-          exit 1
+        run: exit 1
