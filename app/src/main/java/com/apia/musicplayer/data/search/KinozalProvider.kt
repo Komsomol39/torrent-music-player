@@ -1,42 +1,57 @@
 package com.apia.musicplayer.data.search
+
 import com.apia.musicplayer.domain.model.TorrentResult
-import okhttp3.*; import org.jsoup.Jsoup; import javax.inject.Inject; import javax.inject.Singleton
+import okhttp3.*
+import org.jsoup.Jsoup
+import javax.inject.Inject
+import javax.inject.Singleton
 
 @Singleton
 class KinozalProvider @Inject constructor(private val client: OkHttpClient) : SearchProvider {
     override val name = "Kinozal"
-    private val base = "https://kinozal.tv"
+    private val baseUrl = "https://kinozal.tv"
     private var cookie: String? = null
 
-    suspend fun login(user: String, pass: String): Boolean = try {
-        val body = FormBody.Builder().add("user", user).add("pass", pass).add("action", "login").build()
-        val r = client.newCall(Request.Builder().url("$base/takelogin.php").post(body)
-            .header("User-Agent","Mozilla/5.0").build()).execute()
-        cookie = r.headers("Set-Cookie").firstOrNull { it.contains("uid") }?.substringBefore(";")
-        r.close(); cookie != null
-    } catch (e: Exception) { false }
+    suspend fun login(user: String, pass: String): Boolean {
+        return try {
+            val body = FormBody.Builder().add("username", user).add("password", pass).build()
+            val req = Request.Builder().url("$baseUrl/takelogin.php").post(body)
+                .header("User-Agent","Mozilla/5.0 (Android)").build()
+            val resp = client.newCall(req).execute()
+            cookie = resp.headers("Set-Cookie").firstOrNull { it.contains("uid") }?.substringBefore(";")
+            resp.close(); cookie != null
+        } catch (e: Exception) { false }
+    }
 
     override suspend fun search(query: String): List<TorrentResult> {
-        val enc = java.net.URLEncoder.encode(query, "UTF-8")
-        val req = Request.Builder().url("$base/browse.php?s=$enc&c=8") // c=8 = музыка
-            .header("User-Agent","Mozilla/5.0").apply { cookie?.let { header("Cookie", it) } }.build()
-        val html = try { client.newCall(req).execute().use { it.body?.string() ?: "" } } catch (e: Exception) { return emptyList() }
-        return Jsoup.parse(html).select("tr.first,tr.butt").mapNotNull { row ->
+        val encoded = java.net.URLEncoder.encode(query, "UTF-8")
+        val rb = Request.Builder().url("$baseUrl/browse.php?s=$encoded&c=23")
+            .header("User-Agent","Mozilla/5.0 (Android)")
+        cookie?.let { rb.header("Cookie", it) }
+        val html = client.newCall(rb.build()).execute().use { it.body?.string() ?: "" }
+        val doc = Jsoup.parse(html)
+        return doc.select("table.t_peer tr.bg").mapNotNull { row ->
             val a = row.selectFirst("td.nam a") ?: return@mapNotNull null
-            val id = a.attr("href").substringAfter("id=").substringBefore("&")
-            TorrentResult("kinozal_$id", a.text(),
-                a.text().substringBefore(" - ").takeIf { a.text().contains(" - ") },
-                null, null,
-                row.selectFirst("td.s")?.text()?.toIntOrNull() ?: 0,
-                row.selectFirst("td.l")?.text()?.toIntOrNull() ?: 0,
-                0L, "$base/get_srv_details.php?id=$id&action=2", "Kinozal")
-        }
+            val title = a.text()
+            val id = Regex("id=(\\d+)").find(a.attr("href"))?.groupValues?.get(1) ?: return@mapNotNull null
+            val seeds = row.select("td").getOrNull(5)?.text()?.toIntOrNull() ?: 0
+            val size = row.select("td").getOrNull(3)?.text() ?: ""
+            TorrentResult("kinozal_$id", title, title.substringBefore(" - ").takeIf { title.contains(" - ") },
+                null, null, seeds, 0, parseSize(size), "$baseUrl/get_srv_details.php?id=$id&action=2", "Kinozal")
+        }.sortedByDescending { it.seeders }
     }
+
     override suspend fun getMagnet(result: TorrentResult): String {
-        val req = Request.Builder().url(result.magnetLink)
-            .header("User-Agent","Mozilla/5.0").apply { cookie?.let { header("Cookie", it) } }.build()
-        return try { val html = client.newCall(req).execute().use { it.body?.string() ?: "" }
-            Jsoup.parse(html).selectFirst("a[href^=magnet:]")?.attr("href") ?: result.magnetLink
-        } catch (e: Exception) { result.magnetLink }
+        val rb = Request.Builder().url(result.magnetLink).header("User-Agent","Mozilla/5.0 (Android)")
+        cookie?.let { rb.header("Cookie", it) }
+        val html = client.newCall(rb.build()).execute().use { it.body?.string() ?: "" }
+        return Jsoup.parse(html).selectFirst("a[href^=magnet:]")?.attr("href") ?: result.magnetLink
+    }
+
+    private fun parseSize(s: String): Long {
+        val n = Regex("[0-9.]+").find(s)?.value?.toDoubleOrNull() ?: return 0
+        return when { s.contains("ГБ",true)||s.contains("GB",true) -> (n*1_073_741_824).toLong()
+            s.contains("МБ",true)||s.contains("MB",true) -> (n*1_048_576).toLong()
+            else -> (n*1024).toLong() }
     }
 }
