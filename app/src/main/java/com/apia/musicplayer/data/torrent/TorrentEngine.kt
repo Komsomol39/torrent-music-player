@@ -38,6 +38,7 @@ class TorrentEngine @Inject constructor(
     private val sessionManager = SessionManager()
     private val _torrents = MutableStateFlow<Map<String, TorrentState>>(emptyMap())
     val torrents: StateFlow<Map<String, TorrentState>> = _torrents.asStateFlow()
+    private val handleMap = mutableMapOf<String, TorrentHandle>()
 
     val downloadDir: File = File(context.getExternalFilesDir(null), "Music").also { it.mkdirs() }
 
@@ -61,6 +62,7 @@ class TorrentEngine @Inject constructor(
                         val handle = a.handle()
                         handle.resume()
                         val hash = handle.infoHash().toHex()
+                        handleMap[hash] = handle
                         _torrents.update { map ->
                             map + (hash to TorrentState(
                                 infoHash = hash,
@@ -82,7 +84,7 @@ class TorrentEngine @Inject constructor(
                     AlertType.TORRENT_ERROR -> {
                         val a = alert as TorrentErrorAlert
                         val hash = a.handle().infoHash().toHex()
-                        val errMsg = a.error().message()
+                        val errMsg = a.error().message   // поле, не метод
                         _torrents.update { map ->
                             val cur = map[hash] ?: return@update map
                             map + (hash to cur.copy(status = TorrentStatus.ERROR, error = errMsg))
@@ -90,7 +92,6 @@ class TorrentEngine @Inject constructor(
                     }
 
                     AlertType.BLOCK_DOWNLOADING -> {
-                        // Обновляем прогресс через handle status
                         val a = alert as BlockDownloadingAlert
                         val handle = a.handle()
                         val hash = handle.infoHash().toHex()
@@ -119,6 +120,7 @@ class TorrentEngine @Inject constructor(
     }
 
     fun addMagnet(magnetUri: String): String {
+        // SessionManager.download(magnetUri, saveDir) — правильный вызов
         sessionManager.download(magnetUri, downloadDir)
         return magnetUri
             .substringAfter("xt=urn:btih:", "")
@@ -128,21 +130,22 @@ class TorrentEngine @Inject constructor(
     }
 
     fun prioritizeAudioFiles(infoHash: String) {
-        val handle = getHandle(infoHash) ?: return
+        val handle = handleMap[infoHash] ?: return
         val info = handle.torrentFile() ?: return
         val audioExts = setOf("mp3", "flac", "m4a", "ogg", "opus", "wav", "aac")
+        // Priority.TWO = высокий приоритет (0=ignore, 1=normal, 2..7=высокий)
         val priorities = Array(info.numFiles()) { Priority.IGNORE }
         for (i in 0 until info.numFiles()) {
             val name = info.files().fileName(i).lowercase()
             if (audioExts.any { name.endsWith(".$it") }) {
-                priorities[i] = Priority.SEVEN
+                priorities[i] = Priority.TWO
             }
         }
         handle.prioritizeFiles(priorities)
     }
 
     fun getAudioFiles(infoHash: String): List<File> {
-        val handle = getHandle(infoHash) ?: return emptyList()
+        val handle = handleMap[infoHash] ?: return emptyList()
         val info = handle.torrentFile() ?: return emptyList()
         val audioExts = setOf("mp3", "flac", "m4a", "ogg", "opus", "wav", "aac")
         return (0 until info.numFiles())
@@ -152,25 +155,24 @@ class TorrentEngine @Inject constructor(
     }
 
     fun pause(infoHash: String) {
-        getHandle(infoHash)?.pause()
+        handleMap[infoHash]?.pause()
         _torrents.update { map ->
             val cur = map[infoHash] ?: return@update map
             map + (infoHash to cur.copy(status = TorrentStatus.PAUSED))
         }
     }
 
-    fun resume(infoHash: String) = getHandle(infoHash)?.resume()
+    fun resume(infoHash: String) = handleMap[infoHash]?.resume()
 
     fun remove(infoHash: String, deleteFiles: Boolean = false) {
-        val handle = getHandle(infoHash) ?: return
-        sessionManager.remove(handle, if (deleteFiles) SessionHandle.DELETE_FILES else 0)
+        val handle = handleMap[infoHash] ?: return
+        // remove без флага удаления — просто убираем из сессии
+        sessionManager.remove(handle)
+        handleMap.remove(infoHash)
         _torrents.update { it - infoHash }
     }
 
     fun getTorrentState(infoHash: String): TorrentState? = _torrents.value[infoHash]
-
-    private fun getHandle(infoHash: String): TorrentHandle? =
-        sessionManager.handles().firstOrNull { it.infoHash().toHex() == infoHash }
 
     fun stop() = sessionManager.stop()
 }
