@@ -1,77 +1,71 @@
 package com.apia.musicplayer.ui.screens.settings
 
-import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.*
+import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.apia.musicplayer.domain.model.AuthType
 import com.apia.musicplayer.domain.model.SearchSource
 import com.apia.musicplayer.domain.model.SourceCategory
-import com.apia.musicplayer.domain.model.SourceInfo
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
+    var savedSnack by remember { mutableStateOf(false) }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Search Sources") },
-                actions = {
-                    TextButton(onClick = { viewModel.saveSettings() }) {
-                        Text("Save")
-                    }
-                }
-            )
+        topBar = { TopAppBar(title = { Text("Settings") }) },
+        snackbarHost = {
+            if (savedSnack) {
+                Snackbar(
+                    modifier = Modifier.padding(16.dp),
+                    action = { TextButton(onClick = { savedSnack = false }) { Text("OK") } }
+                ) { Text("Settings saved") }
+            }
         }
     ) { padding ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+            modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Группируем по категориям
-            val byCategory = SearchSource.ALL_SOURCES.groupBy { it.category }
-            SourceCategory.entries.forEach { category ->
-                val sources = byCategory[category] ?: return@forEach
+            // Группируем источники по категориям
+            val byCategory = SearchSource.entries.groupBy { it.meta.category }
+            byCategory.forEach { (category, sources) ->
                 item {
-                    CategorySection(
-                        category = category,
-                        sources = sources,
-                        enabledSources = state.enabledSources,
-                        credentials = state.credentials,
-                        onToggle = { source, on -> viewModel.toggleSource(source, on) },
-                        onCredentialChange = { key, value -> viewModel.setCredential(key, value) },
-                        onLogin = { source -> viewModel.login(source) },
-                        loginStatus = state.loginStatus
+                    Spacer(Modifier.height(8.dp))
+                    Text(category.label, style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.height(4.dp))
+                }
+                items(sources, key = { it.name }) { source ->
+                    SourceCard(
+                        source = source,
+                        enabled = state.enabledSources.contains(source),
+                        creds = state.credentials[source] ?: SourceCredentials(),
+                        connectedStatus = state.connectedStatus[source],
+                        onToggle = { viewModel.toggleSource(source, it) },
+                        onCredsChange = { viewModel.updateCreds(source, it) },
+                        onConnect = { viewModel.connect(source) }
                     )
                 }
             }
-
-            // Кнопка сохранить
             item {
+                Spacer(Modifier.height(16.dp))
                 Button(
-                    onClick = { viewModel.saveSettings() },
-                    modifier = Modifier.fillMaxWidth().height(52.dp)
-                ) {
-                    Icon(Icons.Default.Save, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Save All Settings", style = MaterialTheme.typography.titleMedium)
-                }
+                    onClick = { viewModel.saveAll(); savedSnack = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Save all settings") }
                 Spacer(Modifier.height(32.dp))
             }
         }
@@ -79,137 +73,109 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 }
 
 @Composable
-fun CategorySection(
-    category: SourceCategory,
-    sources: List<SourceInfo>,
-    enabledSources: Set<SearchSource>,
-    credentials: Map<String, String>,
-    onToggle: (SearchSource, Boolean) -> Unit,
-    onCredentialChange: (String, String) -> Unit,
-    onLogin: (SearchSource) -> Unit,
-    loginStatus: Map<String, Boolean>
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // Заголовок категории
-        Text(
-            category.label,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
-        sources.forEach { info ->
-            SourceCard(
-                info = info,
-                enabled = enabledSources.contains(info.source),
-                credentials = credentials,
-                onToggle = { onToggle(info.source, it) },
-                onCredentialChange = onCredentialChange,
-                onLogin = { onLogin(info.source) },
-                isLoggedIn = loginStatus[info.source.name] == true
-            )
-        }
-    }
-}
-
-@Composable
 fun SourceCard(
-    info: SourceInfo,
+    source: SearchSource,
     enabled: Boolean,
-    credentials: Map<String, String>,
+    creds: SourceCredentials,
+    connectedStatus: Boolean?,
     onToggle: (Boolean) -> Unit,
-    onCredentialChange: (String, String) -> Unit,
-    onLogin: () -> Unit,
-    isLoggedIn: Boolean
+    onCredsChange: (SourceCredentials) -> Unit,
+    onConnect: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val needsCredentials = info.requiresLogin || info.requiresToken
+    val meta = source.meta
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .animateContentSize()
-            .clip(RoundedCornerShape(16.dp))
-            .clickable { if (needsCredentials) expanded = !expanded },
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (enabled)
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-            else
-                MaterialTheme.colorScheme.surfaceVariant
+            containerColor = if (enabled) MaterialTheme.colorScheme.surfaceVariant
+                             else MaterialTheme.colorScheme.surface
         )
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // Заголовок карточки
+        Column(modifier = Modifier.padding(12.dp)) {
+            // Header row
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "${info.source.emoji}  ${info.source.displayName}",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f)
-                )
-                // Индикатор логина
-                if (needsCredentials) {
-                    Icon(
-                        if (isLoggedIn) Icons.Default.CheckCircle else Icons.Default.Lock,
-                        null,
-                        tint = if (isLoggedIn) MaterialTheme.colorScheme.primary
-                               else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp).padding(end = 4.dp)
-                    )
+                Text(meta.emoji, style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(meta.displayName, style = MaterialTheme.typography.bodyLarge)
+                        // Quality chip
+                        SuggestionChip(
+                            onClick = {},
+                            label = { Text(meta.quality, style = MaterialTheme.typography.labelSmall) },
+                            modifier = Modifier.height(22.dp)
+                        )
+                        // Auth badge
+                        if (meta.authType != AuthType.NONE) {
+                            val (icon, color) = when {
+                                connectedStatus == true -> Icons.Default.CheckCircle to MaterialTheme.colorScheme.primary
+                                meta.authType == AuthType.OPTIONAL_TOKEN -> Icons.Default.LockOpen to MaterialTheme.colorScheme.onSurfaceVariant
+                                else -> Icons.Default.Lock to MaterialTheme.colorScheme.secondary
+                            }
+                            Icon(icon, null, tint = color, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                    Text(meta.description, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Switch(
-                    checked = enabled,
-                    onCheckedChange = onToggle,
-                    modifier = Modifier.padding(start = 8.dp)
-                )
-            }
-
-            // Описание
-            Text(
-                info.description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-
-            // Качество + требования
-            Row(
-                modifier = Modifier.padding(top = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                if (info.quality.isNotBlank()) {
-                    QualityChip(info.quality)
+                // Expand credentials button
+                if (meta.authType != AuthType.NONE) {
+                    IconButton(onClick = { expanded = !expanded }) {
+                        Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null)
+                    }
                 }
-                if (info.requiresLogin) StatusChip("Login required", MaterialTheme.colorScheme.secondary)
-                if (info.requiresToken) StatusChip("Token required", MaterialTheme.colorScheme.tertiary)
+                Switch(checked = enabled, onCheckedChange = onToggle)
             }
 
-            // Форма с логином/токеном (разворачивается)
-            if (expanded && needsCredentials) {
-                Spacer(Modifier.height(12.dp))
-                HorizontalDivider()
-                Spacer(Modifier.height(12.dp))
-                CredentialsForm(
-                    source = info.source,
-                    requiresLogin = info.requiresLogin,
-                    credentials = credentials,
-                    onCredentialChange = onCredentialChange,
-                    onLogin = onLogin,
-                    isLoggedIn = isLoggedIn
-                )
-            }
-
-            // Стрелка если есть что развернуть
-            if (needsCredentials) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
-                    )
+            // Credentials form
+            AnimatedVisibility(visible = expanded) {
+                Column(modifier = Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    HorizontalDivider()
+                    when (meta.authType) {
+                        AuthType.LOGIN_PASS -> {
+                            OutlinedTextField(
+                                value = creds.login,
+                                onValueChange = { onCredsChange(creds.copy(login = it)) },
+                                label = { Text("Login") },
+                                modifier = Modifier.fillMaxWidth(),
+                                leadingIcon = { Icon(Icons.Default.Person, null) },
+                                singleLine = true
+                            )
+                            PasswordTextField(
+                                value = creds.password,
+                                label = "Password",
+                                onValueChange = { onCredsChange(creds.copy(password = it)) }
+                            )
+                            Button(onClick = onConnect, modifier = Modifier.fillMaxWidth()) {
+                                if (connectedStatus == true) {
+                                    Icon(Icons.Default.CheckCircle, null)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Connected")
+                                } else {
+                                    Text("Connect")
+                                }
+                            }
+                        }
+                        AuthType.TOKEN, AuthType.OPTIONAL_TOKEN -> {
+                            val label = when (source) {
+                                SearchSource.VK -> "VK Token (Kate Mobile)"
+                                SearchSource.YANDEX -> "Yandex OAuth Token"
+                                SearchSource.DEEZER -> "ARL Cookie (optional)"
+                                SearchSource.SOUNDCLOUD -> "Client ID (auto-extracted if empty)"
+                                SearchSource.YOUTUBE -> "YouTube API Key (optional)"
+                                SearchSource.JAMENDO -> "Client ID (has built-in demo key)"
+                                SearchSource.FMA -> "API Key (has built-in public key)"
+                                else -> "Token / API Key"
+                            }
+                            PasswordTextField(
+                                value = creds.token,
+                                label = label,
+                                onValueChange = { onCredsChange(creds.copy(token = it)) }
+                            )
+                        }
+                        AuthType.NONE -> {}
+                    }
                 }
             }
         }
@@ -217,103 +183,10 @@ fun SourceCard(
 }
 
 @Composable
-fun CredentialsForm(
-    source: SearchSource,
-    requiresLogin: Boolean,
-    credentials: Map<String, String>,
-    onCredentialChange: (String, String) -> Unit,
-    onLogin: () -> Unit,
-    isLoggedIn: Boolean
-) {
-    val loginKey = "${source.name}_login"
-    val passKey  = "${source.name}_pass"
-    val tokenKey = "${source.name}_token"
-
-    if (requiresLogin) {
-        OutlinedTextField(
-            value = credentials[loginKey] ?: "",
-            onValueChange = { onCredentialChange(loginKey, it) },
-            label = { Text("Login") },
-            leadingIcon = { Icon(Icons.Default.Person, null) },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-        Spacer(Modifier.height(8.dp))
-        PasswordField(
-            value = credentials[passKey] ?: "",
-            label = "Password",
-            onValueChange = { onCredentialChange(passKey, it) }
-        )
-        Spacer(Modifier.height(12.dp))
-        Button(
-            onClick = onLogin,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (isLoggedIn) MaterialTheme.colorScheme.primary
-                                 else MaterialTheme.colorScheme.secondary
-            )
-        ) {
-            Icon(
-                if (isLoggedIn) Icons.Default.CheckCircle else Icons.Default.Login,
-                null
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(if (isLoggedIn) "Connected ✓" else "Connect")
-        }
-    } else {
-        // Только токен
-        val hint = when (source) {
-            SearchSource.VK -> "Kate Mobile token (vk.com → settings → devices)"
-            SearchSource.DEEZER -> "ARL cookie from deezer.com"
-            SearchSource.YANDEX -> "Token from yandex.ru (see docs)"
-            SearchSource.SOUNDCLOUD -> "Client ID from soundcloud.com/developers"
-            SearchSource.JAMENDO -> "API key from developer.jamendo.com"
-            SearchSource.YOUTUBE -> "API key from console.cloud.google.com (optional)"
-            else -> "Token"
-        }
-        Text(hint, style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(8.dp))
-        PasswordField(
-            value = credentials[tokenKey] ?: "",
-            label = "Token / API Key",
-            onValueChange = { onCredentialChange(tokenKey, it) }
-        )
-    }
-}
-
-@Composable
-fun QualityChip(quality: String) {
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer
-    ) {
-        Text(
-            "🎵 $quality",
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
-    }
-}
-
-@Composable
-fun StatusChip(label: String, color: androidx.compose.ui.graphics.Color) {
-    Surface(shape = RoundedCornerShape(8.dp), color = color.copy(alpha = 0.15f)) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelSmall,
-            color = color,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
-    }
-}
-
-@Composable
-fun PasswordField(value: String, label: String, onValueChange: (String) -> Unit) {
+fun PasswordTextField(value: String, label: String, onValueChange: (String) -> Unit) {
     var visible by remember { mutableStateOf(false) }
     OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
+        value = value, onValueChange = onValueChange,
         label = { Text(label) },
         modifier = Modifier.fillMaxWidth(),
         visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
