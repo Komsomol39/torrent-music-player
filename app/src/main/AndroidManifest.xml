@@ -12,6 +12,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".MusicApp"
@@ -44,7 +45,7 @@
 
         <!-- Torrent download service -->
         <service
-            android:name=".data.torrent.TorrentService"
+            android:name=".data.torrent.TorrentDownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
