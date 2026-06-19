@@ -187,15 +187,8 @@ class TorrentEngine @Inject constructor(
 
     fun getTorrentState(infoHash: String): TorrentState? = _torrents.value[infoHash]
 
-    private fun findHandle(infoHash: String): TorrentHandle? {
-        // Sha1Hash не имеет String конструктора в 2.x — ищем по hex через handles
-        return try {
-            val hex = infoHash.lowercase()
-            sessionManager.handles().firstOrNull { h ->
-                try { h.infoHash().toHex() == hex } catch (e: Exception) { false }
-            }
-        } catch (e: Exception) { null }
-    }
+    private fun findHandle(infoHash: String): TorrentHandle? =
+        try { sessionManager.find(Sha1Hash(infoHash)) } catch (e: Exception) { null }
 
     fun stop() = sessionManager.stop()
 }
