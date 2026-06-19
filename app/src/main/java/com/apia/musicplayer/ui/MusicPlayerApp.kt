@@ -37,16 +37,16 @@ fun MusicPlayerApp() {
                         label = { Text("Search") }
                     )
                     NavigationBarItem(
-                        selected = currentRoute == Screen.Torrent.route,
+                        selected = currentRoute == Screen.Torrent.route || currentRoute == Screen.Downloads.route,
                         onClick = { navController.navigate(Screen.Torrent.route) },
                         icon = { Icon(Icons.Default.TravelExplore, null) },
                         label = { Text("Find") }
                     )
                     NavigationBarItem(
-                        selected = currentRoute == Screen.Downloads.route,
-                        onClick = { navController.navigate(Screen.Downloads.route) },
-                        icon = { Icon(Icons.Default.Download, null) },
-                        label = { Text("Downloads") }
+                        selected = currentRoute == Screen.Settings.route,
+                        onClick = { navController.navigate(Screen.Settings.route) },
+                        icon = { Icon(Icons.Default.Settings, null) },
+                        label = { Text("Settings") }
                     )
                 }
             }
