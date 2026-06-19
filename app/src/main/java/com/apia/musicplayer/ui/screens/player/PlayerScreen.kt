@@ -24,6 +24,7 @@ import com.apia.musicplayer.ui.util.formatDuration
 @Composable
 fun PlayerScreen(
     onBack: () -> Unit,
+    onEqualizer: () -> Unit = {},
     viewModel: PlayerViewModel = hiltViewModel()
 ) {
     val state by viewModel.playerState.collectAsState()
@@ -50,41 +51,32 @@ fun PlayerScreen(
                 modifier = Modifier.weight(1f),
                 textAlign = TextAlign.Center
             )
-            IconButton(onClick = { /* queue */ }) {
-                Icon(Icons.Default.QueueMusic, "Queue")
+            IconButton(onClick = onEqualizer) {
+                Icon(Icons.Default.GraphicEq, "Equalizer")
             }
         }
 
         Spacer(Modifier.height(32.dp))
 
-        // Album art — big
         AlbumArtwork(
             uri = track?.artworkUri,
-            modifier = Modifier
-                .size(280.dp)
-                .clip(RoundedCornerShape(24.dp))
+            modifier = Modifier.size(280.dp).clip(RoundedCornerShape(24.dp))
         )
 
         Spacer(Modifier.height(32.dp))
 
-        // Track info + favorite
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = track?.title ?: "Nothing playing",
                     style = MaterialTheme.typography.headlineSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = track?.artist ?: "",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
                 )
             }
             if (track != null) {
@@ -101,7 +93,6 @@ fun PlayerScreen(
 
         Spacer(Modifier.height(24.dp))
 
-        // Seek bar
         Column(modifier = Modifier.fillMaxWidth()) {
             Slider(
                 value = state.progress,
@@ -109,32 +100,30 @@ fun PlayerScreen(
                 modifier = Modifier.fillMaxWidth()
             )
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(state.currentPositionMs.formatDuration(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(state.durationMs.formatDuration(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(state.currentPositionMs.formatDuration(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(state.durationMs.formatDuration(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 
         Spacer(Modifier.height(16.dp))
 
-        // Controls
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Shuffle
             IconButton(onClick = { viewModel.toggleShuffle() }) {
-                Icon(
-                    Icons.Default.Shuffle, "Shuffle",
+                Icon(Icons.Default.Shuffle, "Shuffle",
                     tint = if (state.isShuffleOn) MaterialTheme.colorScheme.primary
-                           else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                           else MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            // Previous
             IconButton(onClick = { viewModel.skipPrevious() }, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.Default.SkipPrevious, "Previous", modifier = Modifier.size(36.dp))
             }
-            // Play/Pause — large button
             IconButton(
                 onClick = { viewModel.togglePlayPause() },
                 modifier = Modifier.size(72.dp).background(MaterialTheme.colorScheme.primary, CircleShape)
@@ -146,11 +135,9 @@ fun PlayerScreen(
                     tint = MaterialTheme.colorScheme.onPrimary
                 )
             }
-            // Next
             IconButton(onClick = { viewModel.skipNext() }, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.Default.SkipNext, "Next", modifier = Modifier.size(36.dp))
             }
-            // Repeat
             IconButton(onClick = { viewModel.cycleRepeatMode() }) {
                 Icon(
                     when (state.repeatMode) {
