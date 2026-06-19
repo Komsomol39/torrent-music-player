@@ -1,5 +1,6 @@
 package com.apia.musicplayer.ui.screens.settings
 
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -19,6 +20,9 @@ data class SettingsState(
     val enabledSources: Set<SearchSource> = SearchSource.entries.filter { it.meta.defaultEnabled }.toSet(),
     val credentials: Map<SearchSource, SourceCredentials> = emptyMap(),
     val connectedStatus: Map<SearchSource, Boolean> = emptyMap(),
+    val connectingSource: SearchSource? = null,
+    val lastError: Map<SearchSource, String> = emptyMap(),
+    val saveMessage: String? = null,
     val isLoaded: Boolean = false
 )
 
@@ -37,14 +41,11 @@ class SettingsViewModel @Inject constructor(
         fun connKey(src: SearchSource) = booleanPreferencesKey("conn_${src.name}")
     }
 
-    init {
-        loadSettings()
-    }
+    init { loadSettings() }
 
     private fun loadSettings() {
         viewModelScope.launch {
             val prefs = dataStore.data.first()
-
             val enabled = prefs[KEY_ENABLED]
                 ?.mapNotNull { runCatching { SearchSource.valueOf(it) }.getOrNull() }
                 ?.toSet()
@@ -57,10 +58,7 @@ class SettingsViewModel @Inject constructor(
                     token    = prefs[credKey(src, "token")] ?: ""
                 )
             }
-
-            val connected = SearchSource.entries.associateWith { src ->
-                prefs[connKey(src)] ?: false
-            }
+            val connected = SearchSource.entries.associateWith { prefs[connKey(it)] ?: false }
 
             _state.update { it.copy(
                 enabledSources = enabled,
@@ -68,27 +66,25 @@ class SettingsViewModel @Inject constructor(
                 connectedStatus = connected,
                 isLoaded = true
             )}
-
-            // Синхронизируем агрегатор
             aggregator.enabledSources.clear()
             aggregator.enabledSources.addAll(enabled)
             applyCredentials(creds)
 
-            // Автологин для источников с сохранёнными кредами
-            SearchSource.entries.forEach { src ->
-                val c = creds[src] ?: return@forEach
+            // Автологин для источников с кредами
+            creds.forEach { (src, c) ->
+                if (connected[src] == true) return@forEach  // уже подключён
                 when (src) {
                     SearchSource.RUTRACKER -> if (c.login.isNotBlank() && c.password.isNotBlank()) {
-                        val ok = aggregator.rutracker.login(c.login, c.password)
-                        if (ok) markConnected(src, true)
+                        runCatching { aggregator.rutracker.login(c.login, c.password) }
+                            .onSuccess { ok -> if (ok) markConnected(src, true) }
                     }
                     SearchSource.KINOZAL -> if (c.login.isNotBlank() && c.password.isNotBlank()) {
-                        val ok = aggregator.kinozal.login(c.login, c.password)
-                        if (ok) markConnected(src, true)
+                        runCatching { aggregator.kinozal.login(c.login, c.password) }
+                            .onSuccess { ok -> if (ok) markConnected(src, true) }
                     }
                     SearchSource.NNMCLUB -> if (c.login.isNotBlank() && c.password.isNotBlank()) {
-                        val ok = aggregator.nnmclub.login(c.login, c.password)
-                        if (ok) markConnected(src, true)
+                        runCatching { aggregator.nnmclub.login(c.login, c.password) }
+                            .onSuccess { ok -> if (ok) markConnected(src, true) }
                     }
                     else -> {}
                 }
@@ -110,22 +106,32 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun connect(source: SearchSource) {
+        _state.update { it.copy(connectingSource = source, lastError = it.lastError - source) }
         viewModelScope.launch {
             val creds = _state.value.credentials[source] ?: return@launch
-            val ok = when (source) {
-                SearchSource.RUTRACKER -> aggregator.rutracker.login(creds.login, creds.password)
-                SearchSource.KINOZAL   -> aggregator.kinozal.login(creds.login, creds.password)
-                SearchSource.NNMCLUB   -> aggregator.nnmclub.login(creds.login, creds.password)
-                else -> { applyToken(source, creds.token); true }
+            try {
+                val ok = when (source) {
+                    SearchSource.RUTRACKER -> aggregator.rutracker.login(creds.login, creds.password)
+                    SearchSource.KINOZAL   -> aggregator.kinozal.login(creds.login, creds.password)
+                    SearchSource.NNMCLUB   -> aggregator.nnmclub.login(creds.login, creds.password)
+                    else -> { applyToken(source, creds.token); true }
+                }
+                markConnected(source, ok)
+                if (!ok) {
+                    _state.update { it.copy(lastError = it.lastError + (source to "Wrong login or password")) }
+                } else {
+                    dataStore.edit { prefs -> prefs[connKey(source)] = true }
+                }
+                Log.d("Settings", "connect $source: $ok")
+            } catch (e: Exception) {
+                val msg = e.message ?: e.javaClass.simpleName
+                Log.e("Settings", "connect $source failed: $msg")
+                markConnected(source, false)
+                _state.update { it.copy(lastError = it.lastError + (source to msg)) }
+            } finally {
+                _state.update { it.copy(connectingSource = null) }
             }
-            markConnected(source, ok)
-            // Сохраняем статус подключения
-            dataStore.edit { prefs -> prefs[connKey(source)] = ok }
         }
-    }
-
-    private fun markConnected(source: SearchSource, ok: Boolean) {
-        _state.update { it.copy(connectedStatus = it.connectedStatus + (source to ok)) }
     }
 
     fun saveAll() {
@@ -140,13 +146,18 @@ class SettingsViewModel @Inject constructor(
                 }
             }
             applyCredentials(s.credentials)
+            _state.update { it.copy(saveMessage = "Saved ${s.enabledSources.size} sources") }
         }
     }
 
+    fun clearSaveMessage() = _state.update { it.copy(saveMessage = null) }
+
+    private fun markConnected(source: SearchSource, ok: Boolean) {
+        _state.update { it.copy(connectedStatus = it.connectedStatus + (source to ok)) }
+    }
+
     private fun applyCredentials(creds: Map<SearchSource, SourceCredentials>) {
-        creds.forEach { (src, c) ->
-            if (c.token.isNotBlank()) applyToken(src, c.token)
-        }
+        creds.forEach { (src, c) -> if (c.token.isNotBlank()) applyToken(src, c.token) }
     }
 
     private fun applyToken(src: SearchSource, token: String) {
