@@ -139,7 +139,6 @@ class TorrentEngine @Inject constructor(
             // Fallback: добавляем через AddTorrentParams + swig API
             val params = AddTorrentParams.parseMagnetUri(magnetUri)
             params.setSavePath(downloadDir.absolutePath)
-            val ec = org.libtorrent4j.ErrorCode()
             sessionManager.swig().async_add_torrent(params.swig())
             hash
         }
