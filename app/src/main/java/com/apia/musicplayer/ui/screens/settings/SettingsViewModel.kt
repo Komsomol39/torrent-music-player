@@ -15,115 +15,101 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class SettingsState(
-    val enabledSources: Set<SearchSource> = SearchSource.DEFAULT_ENABLED,
-    val credentials: Map<String, String> = emptyMap(),
-    val loginStatus: Map<String, Boolean> = emptyMap(),
-    val isSaving: Boolean = false
+    val enabledSources: Set<SearchSource> = SearchSource.entries.filter { it.meta.defaultEnabled }.toSet(),
+    val credentials: Map<SearchSource, SourceCredentials> = emptyMap(),
+    val connectedStatus: Map<SearchSource, Boolean> = emptyMap()
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val dataStore: DataStore<Preferences>,
-    private val aggregator: SearchAggregator,
-    private val rutracker: RuTrackerProvider,
-    private val kinozal: KinozalProvider,
-    private val nnmclub: NnmClubProvider,
-    private val vk: VkMusicProvider,
-    private val youtube: YouTubeProvider,
-    private val soundcloud: SoundCloudProvider,
-    private val deezer: DeezerProvider,
-    private val yandex: YandexMusicProvider,
-    private val jamendo: JamendoProvider
+    private val aggregator: SearchAggregator
 ) : ViewModel() {
-
-    companion object {
-        val KEY_SOURCES = stringSetPreferencesKey("enabled_sources")
-    }
 
     private val _state = MutableStateFlow(SettingsState())
     val state: StateFlow<SettingsState> = _state.asStateFlow()
 
-    init {
-        viewModelScope.launch {
-            dataStore.data.first().let { prefs ->
-                // Загружаем включённые источники
-                val sources = prefs[KEY_SOURCES]
-                    ?.mapNotNull { runCatching { SearchSource.valueOf(it) }.getOrNull() }
-                    ?.toSet() ?: SearchSource.DEFAULT_ENABLED
-
-                // Загружаем все credentials
-                val creds = mutableMapOf<String, String>()
-                SearchSource.ALL_SOURCES.forEach { info ->
-                    val s = info.source
-                    listOf("${s.name}_login", "${s.name}_pass", "${s.name}_token").forEach { key ->
-                        prefs[stringPreferencesKey(key)]?.let { creds[key] = it }
-                    }
-                }
-
-                _state.update { it.copy(enabledSources = sources, credentials = creds) }
-                aggregator.enabledSources.clear()
-                aggregator.enabledSources.addAll(sources)
-                applyCredentials(creds)
-            }
-        }
+    companion object {
+        val KEY_ENABLED = stringSetPreferencesKey("enabled_sources")
+        fun credKey(src: SearchSource, field: String) = stringPreferencesKey("cred_${src.name}_$field")
     }
 
-    fun toggleSource(source: SearchSource, enabled: Boolean) {
-        _state.update { s ->
-            val new = if (enabled) s.enabledSources + source else s.enabledSources - source
+    init { loadSettings() }
+
+    private fun loadSettings() {
+        viewModelScope.launch {
+            val prefs = dataStore.data.first()
+            val enabled = prefs[KEY_ENABLED]
+                ?.mapNotNull { runCatching { SearchSource.valueOf(it) }.getOrNull() }
+                ?.toSet() ?: _state.value.enabledSources
+            val creds = SearchSource.entries.associateWith { src ->
+                SourceCredentials(
+                    login    = prefs[credKey(src, "login")] ?: "",
+                    password = prefs[credKey(src, "pass")] ?: "",
+                    token    = prefs[credKey(src, "token")] ?: ""
+                )
+            }
+            _state.update { it.copy(enabledSources = enabled, credentials = creds) }
             aggregator.enabledSources.clear()
-            aggregator.enabledSources.addAll(new)
-            s.copy(enabledSources = new)
+            aggregator.enabledSources.addAll(enabled)
+            applyCredentials(creds)
         }
     }
 
-    fun setCredential(key: String, value: String) {
-        _state.update { it.copy(credentials = it.credentials + (key to value)) }
+    fun toggleSource(source: SearchSource, on: Boolean) {
+        _state.update { s ->
+            val newSrc = if (on) s.enabledSources + source else s.enabledSources - source
+            aggregator.enabledSources.clear(); aggregator.enabledSources.addAll(newSrc)
+            s.copy(enabledSources = newSrc)
+        }
     }
 
-    fun login(source: SearchSource) {
+    fun updateCreds(source: SearchSource, creds: SourceCredentials) {
+        _state.update { it.copy(credentials = it.credentials + (source to creds)) }
+    }
+
+    fun connect(source: SearchSource) {
         viewModelScope.launch {
-            val creds = state.value.credentials
+            val creds = _state.value.credentials[source] ?: return@launch
             val ok = when (source) {
-                SearchSource.RUTRACKER -> rutracker.login(
-                    creds["${source.name}_login"] ?: "",
-                    creds["${source.name}_pass"] ?: ""
-                )
-                SearchSource.KINOZAL -> kinozal.login(
-                    creds["${source.name}_login"] ?: "",
-                    creds["${source.name}_pass"] ?: ""
-                )
-                SearchSource.NNMCLUB -> nnmclub.login(
-                    creds["${source.name}_login"] ?: "",
-                    creds["${source.name}_pass"] ?: ""
-                )
-                else -> false
+                SearchSource.RUTRACKER -> aggregator.rutracker.login(creds.login, creds.password)
+                SearchSource.KINOZAL   -> aggregator.kinozal.login(creds.login, creds.password)
+                SearchSource.NNMCLUB   -> aggregator.nnmclub.login(creds.login, creds.password)
+                else -> { applyToken(source, creds.token); true }
             }
-            _state.update { it.copy(loginStatus = it.loginStatus + (source.name to ok)) }
+            _state.update { it.copy(connectedStatus = it.connectedStatus + (source to ok)) }
         }
     }
 
-    fun saveSettings() {
+    fun saveAll() {
         viewModelScope.launch {
-            _state.update { it.copy(isSaving = true) }
-            val s = state.value
+            val s = _state.value
             dataStore.edit { prefs ->
-                prefs[KEY_SOURCES] = s.enabledSources.map { it.name }.toSet()
-                s.credentials.forEach { (key, value) ->
-                    prefs[stringPreferencesKey(key)] = value
+                prefs[KEY_ENABLED] = s.enabledSources.map { it.name }.toSet()
+                s.credentials.forEach { (src, creds) ->
+                    prefs[credKey(src, "login")] = creds.login
+                    prefs[credKey(src, "pass")]  = creds.password
+                    prefs[credKey(src, "token")] = creds.token
                 }
             }
             applyCredentials(s.credentials)
-            _state.update { it.copy(isSaving = false) }
         }
     }
 
-    private fun applyCredentials(creds: Map<String, String>) {
-        vk.token         = creds["${SearchSource.VK.name}_token"] ?: ""
-        youtube.apiKey   = creds["${SearchSource.YOUTUBE.name}_token"] ?: ""
-        soundcloud.clientId = creds["${SearchSource.SOUNDCLOUD.name}_token"] ?: ""
-        deezer.arlToken  = creds["${SearchSource.DEEZER.name}_token"] ?: ""
-        yandex.token     = creds["${SearchSource.YANDEX.name}_token"] ?: ""
-        jamendo.apiKey   = creds["${SearchSource.JAMENDO.name}_token"] ?: ""
+    private fun applyCredentials(creds: Map<SearchSource, SourceCredentials>) {
+        creds.forEach { (src, c) -> applyToken(src, c.token) }
+    }
+
+    private fun applyToken(src: SearchSource, token: String) {
+        when (src) {
+            SearchSource.VK         -> aggregator.vk.token = token
+            SearchSource.YOUTUBE    -> aggregator.youtube.apiKey = token
+            SearchSource.SOUNDCLOUD -> aggregator.soundcloud.clientId = token
+            SearchSource.DEEZER     -> aggregator.deezer.arlCookie = token
+            SearchSource.YANDEX     -> aggregator.yandex.token = token
+            SearchSource.JAMENDO    -> { if (token.isNotBlank()) aggregator.jamendo.clientId = token }
+            SearchSource.FMA        -> {} // встроенный ключ
+            else -> {}
+        }
     }
 }
