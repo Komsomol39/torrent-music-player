@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.apia.musicplayer.data.search.SearchAggregator
+import com.apia.musicplayer.data.search.SourceResult
 import com.apia.musicplayer.data.torrent.TorrentDownloadService
 import com.apia.musicplayer.data.torrent.TorrentEngine
 import com.apia.musicplayer.data.torrent.TorrentState
@@ -15,6 +16,12 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+data class SourceStatus(
+    val loading: Boolean = false,
+    val resultCount: Int = 0,
+    val error: String? = null
+)
 
 @HiltViewModel
 class TorrentViewModel @Inject constructor(
@@ -28,10 +35,8 @@ class TorrentViewModel @Inject constructor(
     val results = _results.asStateFlow()
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
-    private val _error = MutableStateFlow<String?>(null)
-    val error = _error.asStateFlow()
-    private val _loadingSources = MutableStateFlow<Set<String>>(emptySet())
-    val loadingSources = _loadingSources.asStateFlow()
+    private val _sourceStatuses = MutableStateFlow<Map<SearchSource, SourceStatus>>(emptyMap())
+    val sourceStatuses = _sourceStatuses.asStateFlow()
 
     val downloads: StateFlow<Map<String, TorrentState>> = engine.torrents
     val enabledSources get() = aggregator.enabledSources
@@ -41,64 +46,77 @@ class TorrentViewModel @Inject constructor(
     fun search() {
         val q = query.value.trim()
         if (q.isBlank()) return
+        val sources = aggregator.enabledSources.toSet()
+        if (sources.isEmpty()) return
+
         viewModelScope.launch {
             _isLoading.value = true
-            _error.value = null
             _results.value = emptyList()
-            _loadingSources.value = aggregator.enabledSources.map { it.name }.toSet()
+            // Инициализируем статус всех источников как "loading"
+            _sourceStatuses.value = sources.associateWith { SourceStatus(loading = true) }
 
-            try {
-                aggregator.searchAll(q, aggregator.enabledSources) { source, partialResults ->
+            aggregator.searchAll(q, sources) { sr: SourceResult ->
+                // Обновляем результаты
+                if (sr.results.isNotEmpty()) {
                     _results.update { current ->
-                        (current + partialResults).sortedByDescending { it.seeders }
+                        (current + sr.results).sortedByDescending { it.seeders }
                     }
-                    _loadingSources.update { it - source.name }
                 }
-            } catch (e: Exception) {
-                _error.value = e.message
-            } finally {
-                _isLoading.value = false
-                _loadingSources.value = emptySet()
+                // Обновляем статус источника
+                _sourceStatuses.update { map ->
+                    map + (sr.source to SourceStatus(
+                        loading = false,
+                        resultCount = sr.results.size,
+                        error = sr.error
+                    ))
+                }
             }
+
+            _isLoading.value = false
         }
     }
 
     fun download(result: TorrentResult) {
         viewModelScope.launch {
-            val source = SearchSource.entries.find { it.name.lowercase() == result.source.lowercase() }
-                ?: SearchSource.TPB
-            val magnet = aggregator.getMagnet(result, source)
-            // Если это прямая ссылка (VK, YouTube) — играем напрямую, не через торрент
-            if (magnet.startsWith("http") && !magnet.contains("magnet:")) {
-                // TODO: добавить в очередь плеера напрямую
+            val source = SearchSource.entries.find {
+                it.name.equals(result.source, ignoreCase = true) ||
+                it.meta.displayName.equals(result.source, ignoreCase = true)
+            } ?: SearchSource.TPB
+
+            val magnet = try {
+                aggregator.getMagnet(result, source)
+            } catch (e: Exception) { result.magnetLink }
+
+            // Прямые ссылки (VK, YouTube, SoundCloud и т.д.) — не торрент
+            if (!magnet.contains("magnet:?") && (magnet.startsWith("http") || magnet.startsWith("https"))) {
+                // TODO: передать в плеер напрямую как stream
                 return@launch
             }
-            val intent = Intent(context, TorrentDownloadService::class.java).apply {
-                action = TorrentDownloadService.ACTION_ADD_MAGNET
-                putExtra(TorrentDownloadService.EXTRA_MAGNET, magnet)
-            }
-            context.startForegroundService(intent)
+
+            context.startForegroundService(
+                Intent(context, TorrentDownloadService::class.java).apply {
+                    action = TorrentDownloadService.ACTION_ADD_MAGNET
+                    putExtra(TorrentDownloadService.EXTRA_MAGNET, magnet)
+                }
+            )
         }
     }
 
-    fun pause(infoHash: String) {
-        context.startService(Intent(context, TorrentDownloadService::class.java).apply {
+    fun pause(infoHash: String) = context.startService(
+        Intent(context, TorrentDownloadService::class.java).apply {
             action = TorrentDownloadService.ACTION_PAUSE
             putExtra(TorrentDownloadService.EXTRA_HASH, infoHash)
         })
-    }
 
-    fun resume(infoHash: String) {
-        context.startService(Intent(context, TorrentDownloadService::class.java).apply {
+    fun resume(infoHash: String) = context.startService(
+        Intent(context, TorrentDownloadService::class.java).apply {
             action = TorrentDownloadService.ACTION_RESUME
             putExtra(TorrentDownloadService.EXTRA_HASH, infoHash)
         })
-    }
 
-    fun remove(infoHash: String) {
-        context.startService(Intent(context, TorrentDownloadService::class.java).apply {
+    fun remove(infoHash: String) = context.startService(
+        Intent(context, TorrentDownloadService::class.java).apply {
             action = TorrentDownloadService.ACTION_REMOVE
             putExtra(TorrentDownloadService.EXTRA_HASH, infoHash)
         })
-    }
 }
