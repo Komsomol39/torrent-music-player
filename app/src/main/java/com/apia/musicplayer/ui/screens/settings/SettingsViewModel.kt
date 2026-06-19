@@ -2,6 +2,7 @@ package com.apia.musicplayer.ui.screens.settings
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
@@ -17,7 +18,8 @@ import javax.inject.Inject
 data class SettingsState(
     val enabledSources: Set<SearchSource> = SearchSource.entries.filter { it.meta.defaultEnabled }.toSet(),
     val credentials: Map<SearchSource, SourceCredentials> = emptyMap(),
-    val connectedStatus: Map<SearchSource, Boolean> = emptyMap()
+    val connectedStatus: Map<SearchSource, Boolean> = emptyMap(),
+    val isLoaded: Boolean = false
 )
 
 @HiltViewModel
@@ -32,34 +34,73 @@ class SettingsViewModel @Inject constructor(
     companion object {
         val KEY_ENABLED = stringSetPreferencesKey("enabled_sources")
         fun credKey(src: SearchSource, field: String) = stringPreferencesKey("cred_${src.name}_$field")
+        fun connKey(src: SearchSource) = booleanPreferencesKey("conn_${src.name}")
     }
 
-    init { loadSettings() }
+    init {
+        loadSettings()
+    }
 
     private fun loadSettings() {
         viewModelScope.launch {
             val prefs = dataStore.data.first()
+
             val enabled = prefs[KEY_ENABLED]
                 ?.mapNotNull { runCatching { SearchSource.valueOf(it) }.getOrNull() }
-                ?.toSet() ?: _state.value.enabledSources
+                ?.toSet()
+                ?: SearchSource.entries.filter { it.meta.defaultEnabled }.toSet()
+
             val creds = SearchSource.entries.associateWith { src ->
                 SourceCredentials(
                     login    = prefs[credKey(src, "login")] ?: "",
-                    password = prefs[credKey(src, "pass")] ?: "",
+                    password = prefs[credKey(src, "pass")]  ?: "",
                     token    = prefs[credKey(src, "token")] ?: ""
                 )
             }
-            _state.update { it.copy(enabledSources = enabled, credentials = creds) }
+
+            val connected = SearchSource.entries.associateWith { src ->
+                prefs[connKey(src)] ?: false
+            }
+
+            _state.update { it.copy(
+                enabledSources = enabled,
+                credentials = creds,
+                connectedStatus = connected,
+                isLoaded = true
+            )}
+
+            // Синхронизируем агрегатор
             aggregator.enabledSources.clear()
             aggregator.enabledSources.addAll(enabled)
             applyCredentials(creds)
+
+            // Автологин для источников с сохранёнными кредами
+            SearchSource.entries.forEach { src ->
+                val c = creds[src] ?: return@forEach
+                when (src) {
+                    SearchSource.RUTRACKER -> if (c.login.isNotBlank() && c.password.isNotBlank()) {
+                        val ok = aggregator.rutracker.login(c.login, c.password)
+                        if (ok) markConnected(src, true)
+                    }
+                    SearchSource.KINOZAL -> if (c.login.isNotBlank() && c.password.isNotBlank()) {
+                        val ok = aggregator.kinozal.login(c.login, c.password)
+                        if (ok) markConnected(src, true)
+                    }
+                    SearchSource.NNMCLUB -> if (c.login.isNotBlank() && c.password.isNotBlank()) {
+                        val ok = aggregator.nnmclub.login(c.login, c.password)
+                        if (ok) markConnected(src, true)
+                    }
+                    else -> {}
+                }
+            }
         }
     }
 
     fun toggleSource(source: SearchSource, on: Boolean) {
         _state.update { s ->
             val newSrc = if (on) s.enabledSources + source else s.enabledSources - source
-            aggregator.enabledSources.clear(); aggregator.enabledSources.addAll(newSrc)
+            aggregator.enabledSources.clear()
+            aggregator.enabledSources.addAll(newSrc)
             s.copy(enabledSources = newSrc)
         }
     }
@@ -77,8 +118,14 @@ class SettingsViewModel @Inject constructor(
                 SearchSource.NNMCLUB   -> aggregator.nnmclub.login(creds.login, creds.password)
                 else -> { applyToken(source, creds.token); true }
             }
-            _state.update { it.copy(connectedStatus = it.connectedStatus + (source to ok)) }
+            markConnected(source, ok)
+            // Сохраняем статус подключения
+            dataStore.edit { prefs -> prefs[connKey(source)] = ok }
         }
+    }
+
+    private fun markConnected(source: SearchSource, ok: Boolean) {
+        _state.update { it.copy(connectedStatus = it.connectedStatus + (source to ok)) }
     }
 
     fun saveAll() {
@@ -97,18 +144,19 @@ class SettingsViewModel @Inject constructor(
     }
 
     private fun applyCredentials(creds: Map<SearchSource, SourceCredentials>) {
-        creds.forEach { (src, c) -> applyToken(src, c.token) }
+        creds.forEach { (src, c) ->
+            if (c.token.isNotBlank()) applyToken(src, c.token)
+        }
     }
 
     private fun applyToken(src: SearchSource, token: String) {
         when (src) {
             SearchSource.VK         -> aggregator.vk.token = token
             SearchSource.YOUTUBE    -> aggregator.youtube.apiKey = token
-            SearchSource.SOUNDCLOUD -> aggregator.soundcloud.clientId = token
+            SearchSource.SOUNDCLOUD -> if (token.isNotBlank()) aggregator.soundcloud.clientId = token
             SearchSource.DEEZER     -> aggregator.deezer.arlCookie = token
             SearchSource.YANDEX     -> aggregator.yandex.token = token
-            SearchSource.JAMENDO    -> { if (token.isNotBlank()) aggregator.jamendo.clientId = token }
-            SearchSource.FMA        -> {} // встроенный ключ
+            SearchSource.JAMENDO    -> if (token.isNotBlank()) aggregator.jamendo.clientId = token
             else -> {}
         }
     }
