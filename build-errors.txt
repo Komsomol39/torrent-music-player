@@ -1,24 +1,16 @@
-68:> Task :app:compileDebugKotlin FAILED
-69:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:61:47 Unresolved reference: savePath
-70:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:68:43 Unresolved reference: infoHash
-71:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:78:47 Unresolved reference: savePath
-72:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:99:51 Expression 'message' of type 'String!' cannot be invoked as a function. The function 'invoke()' is not found
-73:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:119:33 Type mismatch: inferred type is String but TorrentInfo! was expected
-74:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:176:44 Type mismatch: inferred type is String but sha1_hash! was expected
-75:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentService.kt:25:16 Unresolved reference: start
-76:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentService.kt:30:20 Unresolved reference: downloads
-77:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentService.kt:30:46 Cannot infer a type for this parameter. Please specify it explicitly.
-78:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentService.kt:32:21 Unresolved reference: it
-79:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentService.kt:35:62 Unresolved reference: it
-80:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentService.kt:38:52 Unresolved reference: it
-81:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentService.kt:39:54 Unresolved reference: it
-82:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentService.kt:53:24 Unresolved reference: download
-83:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/ui/screens/downloads/DownloadsScreen.kt:38:45 Unresolved reference: id
-84:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/ui/screens/downloads/DownloadsScreen.kt:39:42 Type mismatch: inferred type is Int but DownloadState was expected
-85:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/ui/screens/downloads/DownloadsScreen.kt:40:60 Unresolved reference: id
-86:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/ui/screens/downloads/DownloadsScreen.kt:41:61 Unresolved reference: id
-87:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/ui/screens/downloads/DownloadsScreen.kt:42:61 Unresolved reference: id
-88:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/ui/screens/downloads/DownloadsViewModel.kt:24:28 Unresolved reference: downloads
-89:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/ui/screens/downloads/DownloadsViewModel.kt:25:16 Unresolved reference: it
-90:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/ui/screens/torrent/TorrentSearchScreen.kt:28:37 Unresolved reference: downloadingIds
-105:BUILD FAILED in 3m 8s
+67:> Task :app:compileDebugKotlin FAILED
+68:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:63:47 Unresolved reference: savePath
+69:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:71:43 Unresolved reference: infoHash
+70:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:81:47 Unresolved reference: savePath
+71:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:99:48 Expression 'message' of type 'String!' cannot be invoked as a function. The function 'invoke()' is not found
+72:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:122:33 Type mismatch: inferred type is String but TorrentInfo! was expected
+73:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:180:38 Type mismatch: inferred type is String but sha1_hash! was expected
+74:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/ui/navigation/NavGraph.kt:7:50 Unresolved reference: DownloadsScreen
+75:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/ui/navigation/NavGraph.kt:37:13 Unresolved reference: DownloadsScreen
+76:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/ui/screens/downloads/DownloadsViewModel.kt:9:42 Unresolved reference: TorrentService
+77:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/ui/screens/downloads/DownloadsViewModel.kt:24:28 Unresolved reference: downloads
+78:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/ui/screens/downloads/DownloadsViewModel.kt:25:16 Unresolved reference: it
+79:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/ui/screens/downloads/DownloadsViewModel.kt:29:38 Unresolved reference: TorrentService
+80:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/ui/screens/downloads/DownloadsViewModel.kt:30:22 Unresolved reference: TorrentService
+81:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/ui/screens/torrent/TorrentSearchScreen.kt:28:37 Unresolved reference: downloadingIds
+96:BUILD FAILED in 3m 12s
