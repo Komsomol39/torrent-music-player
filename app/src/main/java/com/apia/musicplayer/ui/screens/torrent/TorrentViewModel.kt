@@ -5,9 +5,11 @@ import android.content.Intent
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.apia.musicplayer.data.db.TrackDao
 import com.apia.musicplayer.data.search.ArchiveOrgProvider
 import com.apia.musicplayer.data.search.SearchAggregator
 import com.apia.musicplayer.data.search.SourceResult
+import com.apia.musicplayer.data.torrent.StreamDownloader
 import com.apia.musicplayer.data.torrent.TorrentDownloadService
 import com.apia.musicplayer.data.torrent.TorrentEngine
 import com.apia.musicplayer.data.torrent.TorrentState
@@ -35,6 +37,8 @@ class TorrentViewModel @Inject constructor(
     private val aggregator: SearchAggregator,
     private val engine: TorrentEngine,
     private val player: PlayerController,
+    private val downloader: StreamDownloader,
+    private val trackDao: TrackDao,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -67,7 +71,7 @@ class TorrentViewModel @Inject constructor(
         val q = query.value.trim()
         if (q.isBlank()) return
         val sources = aggregator.enabledSources.toSet()
-        if (sources.isEmpty()) { _toast.value = "Enable sources in Settings"; return }
+        if (sources.isEmpty()) { _toast.value = "Enable sources in Settings first"; return }
 
         viewModelScope.launch {
             _isLoading.value = true
@@ -88,8 +92,6 @@ class TorrentViewModel @Inject constructor(
                 }
             }
             _isLoading.value = false
-            val total = _results.value.size
-            if (total == 0) _toast.value = "No results found"
         }
     }
 
@@ -98,12 +100,12 @@ class TorrentViewModel @Inject constructor(
             _playingId.value = result.id
             val source = findSource(result)
             try {
-                // Archive.org — показываем список файлов
+                // Archive.org — файловый пикер
                 if (result.source.contains("Archive", ignoreCase = true)) {
                     val files = (aggregator.archive as? ArchiveOrgProvider)
                         ?.getFileList(result) ?: emptyList()
                     when {
-                        files.size == 1 -> playDirect(result, files[0].url)
+                        files.size == 1 -> playAndSave(result.copy(title = files[0].name.substringBeforeLast(".")), files[0].url)
                         files.isNotEmpty() -> {
                             _pendingResult.value = result
                             _archiveFiles.value = files
@@ -111,7 +113,7 @@ class TorrentViewModel @Inject constructor(
                             _playingId.value = null
                             return@launch
                         }
-                        else -> _toast.value = "No audio files found in this collection"
+                        else -> _toast.value = "No audio files found"
                     }
                     return@launch
                 }
@@ -119,22 +121,19 @@ class TorrentViewModel @Inject constructor(
                 val resolved = try {
                     aggregator.getMagnet(result, source)
                 } catch (e: Exception) {
-                    _toast.value = "Failed to resolve: ${e.message?.take(60)}"
+                    _toast.value = "Resolve error: ${e.message?.take(60)}"
                     return@launch
                 }
 
-                Log.d("TorrentVM", "resolved=$resolved source=$source")
-
                 when {
-                    // Прямая ссылка — играем
-                    resolved.startsWith("http") && !resolved.contains("magnet:?") -> {
-                        playDirect(result, resolved)
-                    }
-                    // Magnet — скачиваем через торрент
-                    resolved.contains("magnet:") -> {
+                    // HTTP стрим — играем И скачиваем
+                    resolved.startsWith("http") && !resolved.contains("magnet:?") ->
+                        playAndSave(result, resolved)
+                    // Magnet — торрент
+                    resolved.contains("magnet:") ->
                         startTorrent(resolved, result.title)
-                    }
-                    else -> _toast.value = "Cannot play: unsupported URL"
+                    else ->
+                        _toast.value = "Cannot play this result"
                 }
             } catch (e: Exception) {
                 Log.e("TorrentVM", "playOrDownload: ${e.message}")
@@ -145,29 +144,53 @@ class TorrentViewModel @Inject constructor(
         }
     }
 
+    /** Играем стрим И параллельно скачиваем его на устройство */
+    private suspend fun playAndSave(result: TorrentResult, url: String) {
+        Log.d("TorrentVM", "Play+Save: $url")
+
+        // 1. Сразу начинаем воспроизведение
+        player.playTrack(Track(
+            id = result.id,
+            title = result.title,
+            artist = result.artist ?: result.source,
+            album  = result.album  ?: result.source,
+            duration = 0L,
+            uri = url
+        ))
+        _toast.value = "▶ Playing: ${result.title.take(35)}"
+
+        // 2. Параллельно скачиваем файл
+        val fileName = buildString {
+            result.artist?.let { append(it); append(" - ") }
+            append(result.title.take(60))
+        }
+        val file = downloader.downloadAsync(url, fileName)
+        if (file != null) {
+            // 3. Добавляем в библиотеку
+            trackDao.upsertTrack(Track(
+                id       = "dl_${file.absolutePath.hashCode()}",
+                title    = result.title,
+                artist   = result.artist ?: "Unknown",
+                album    = result.album  ?: result.source,
+                duration = 0L,
+                uri      = file.toURI().toString()
+            ))
+            _toast.value = "✓ Saved to library: ${file.name.take(40)}"
+        }
+    }
+
     fun playArchiveFile(file: ArchiveFile) {
         _showArchiveDialog.value = false
         val result = _pendingResult.value ?: return
-        viewModelScope.launch { playDirect(result, file.url) }
+        viewModelScope.launch {
+            playAndSave(result.copy(title = file.name.substringBeforeLast(".")), file.url)
+        }
     }
 
     fun dismissArchiveDialog() {
         _showArchiveDialog.value = false
         _archiveFiles.value = emptyList()
         _pendingResult.value = null
-    }
-
-    private suspend fun playDirect(result: TorrentResult, url: String) {
-        Log.d("TorrentVM", "Playing: $url")
-        player.playTrack(Track(
-            id = result.id,
-            title = result.title,
-            artist = result.artist ?: result.source,
-            album = result.album ?: result.source,
-            duration = 0L,
-            uri = url
-        ))
-        _toast.value = "Playing: ${result.title.take(40)}"
     }
 
     private fun startTorrent(magnet: String, name: String) {
@@ -177,7 +200,7 @@ class TorrentViewModel @Inject constructor(
                 putExtra(TorrentDownloadService.EXTRA_MAGNET, magnet)
             }
         )
-        _toast.value = "Download started: ${name.take(40)}"
+        _toast.value = "⬇ Download started: ${name.take(40)}"
     }
 
     private fun findSource(result: TorrentResult): SearchSource =
