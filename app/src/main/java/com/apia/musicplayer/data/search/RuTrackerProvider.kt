@@ -106,7 +106,7 @@ class RuTrackerProvider @Inject constructor(
             val titleEl = row.selectFirst("td.t-title a.tLink") ?: return@forEach
             val title = titleEl.text()
             val href = titleEl.attr("href")
-            val topicId = Regex("t=(\d+)").find(href)?.groupValues?.get(1) ?: return@forEach
+            val topicId = Regex("t=(\\d+)").find(href)?.groupValues?.get(1) ?: return@forEach
             val seeders = row.selectFirst("td.seedmed b")?.text()?.toIntOrNull() ?: 0
             val leechers = row.selectFirst("td.leechmed b")?.text()?.toIntOrNull() ?: 0
             val sizeText = row.selectFirst("td.tor-size")?.text() ?: ""
@@ -115,7 +115,7 @@ class RuTrackerProvider @Inject constructor(
                 title = title,
                 artist = title.substringBefore(" - ").takeIf { title.contains(" - ") },
                 album = title.substringAfter(" - ").takeIf { title.contains(" - ") },
-                year = Regex("\\b(19|20)\\d{2}\\b").find(title)?.value?.toIntOrNull(),
+                year = Regex("\\\b(19|20)\\\d{2}\\\b").find(title)?.value?.toIntOrNull(),
                 seeders = seeders, leechers = leechers,
                 sizeBytes = parseSize(sizeText),
                 magnetLink = "$baseUrl/viewtopic.php?t=$topicId",
