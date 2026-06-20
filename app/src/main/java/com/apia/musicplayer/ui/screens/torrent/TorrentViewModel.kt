@@ -2,8 +2,10 @@ package com.apia.musicplayer.ui.screens.torrent
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.apia.musicplayer.data.search.ArchiveOrgProvider
 import com.apia.musicplayer.data.search.SearchAggregator
 import com.apia.musicplayer.data.search.SourceResult
 import com.apia.musicplayer.data.torrent.TorrentDownloadService
@@ -26,6 +28,9 @@ data class SourceStatus(
     val durationMs: Long = 0
 )
 
+// Файлы в архивной папке для выбора
+data class ArchiveFile(val name: String, val url: String, val size: Long = 0)
+
 @HiltViewModel
 class TorrentViewModel @Inject constructor(
     private val aggregator: SearchAggregator,
@@ -43,6 +48,13 @@ class TorrentViewModel @Inject constructor(
     val sourceStatuses = _sourceStatuses.asStateFlow()
     private val _playingId = MutableStateFlow<String?>(null)
     val playingId = _playingId.asStateFlow()
+
+    // Диалог выбора файла из архивной папки
+    private val _archiveFiles = MutableStateFlow<List<ArchiveFile>>(emptyList())
+    val archiveFiles = _archiveFiles.asStateFlow()
+    private val _showArchiveDialog = MutableStateFlow(false)
+    val showArchiveDialog = _showArchiveDialog.asStateFlow()
+    private val _pendingResult = MutableStateFlow<TorrentResult?>(null)
 
     val downloads: StateFlow<Map<String, TorrentState>> = engine.torrents
     val enabledSources get() = aggregator.enabledSources
@@ -79,58 +91,95 @@ class TorrentViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Воспроизвести или скачать результат.
-     * - Прямые URL (VK, SoundCloud, Archive.org, Deezer preview) → плеер напрямую
-     * - Magnet ссылки → торрент движок
-     * - 1337x detail URL → резолвим magnet сначала
-     */
     fun playOrDownload(result: TorrentResult) {
         viewModelScope.launch {
             _playingId.value = result.id
-
-            val source = SearchSource.entries.find {
-                it.name.equals(result.source, ignoreCase = true) ||
-                it.meta.displayName.equals(result.source, ignoreCase = true)
-            } ?: SearchSource.ARCHIVE
-
+            val source = findSource(result)
             try {
+                // Для Archive.org — сначала загружаем список файлов
+                if (result.source == "Archive.org" || result.source == "ARC") {
+                    val files = (aggregator.archive as? ArchiveOrgProvider)
+                        ?.getFileList(result) ?: emptyList()
+                    if (files.size == 1) {
+                        // Один файл — играем сразу
+                        playDirectUrl(result, files[0].url)
+                    } else if (files.isNotEmpty()) {
+                        // Несколько файлов — показываем диалог выбора
+                        _pendingResult.value = result
+                        _archiveFiles.value = files
+                        _showArchiveDialog.value = true
+                        _playingId.value = null
+                        return@launch
+                    } else {
+                        // Файлов нет — пробуем getMagnet
+                        val url = aggregator.getMagnet(result, source)
+                        playDirectUrl(result, url)
+                    }
+                    return@launch
+                }
+
                 val resolvedUrl = aggregator.getMagnet(result, source)
+                Log.d("TorrentVM", "Resolved: $resolvedUrl")
 
                 when {
-                    // Прямая ссылка — передаём в плеер
-                    resolvedUrl.startsWith("http") && !resolvedUrl.contains("magnet:?") -> {
-                        val track = Track(
-                            id = result.id,
-                            title = result.title,
-                            artist = result.artist ?: result.source,
-                            album = result.album ?: result.source,
-                            duration = result.sizeBytes.takeIf { it < 10_000_000 } ?: 0L,
-                            uri = resolvedUrl,
-                            artworkUri = null
-                        )
-                        player.playTrack(track)
-                    }
-
-                    // Magnet — торрент движок
-                    resolvedUrl.contains("magnet:?") || resolvedUrl.startsWith("magnet:") -> {
-                        context.startForegroundService(
-                            Intent(context, TorrentDownloadService::class.java).apply {
-                                action = TorrentDownloadService.ACTION_ADD_MAGNET
-                                putExtra(TorrentDownloadService.EXTRA_MAGNET, resolvedUrl)
-                            }
-                        )
-                    }
+                    // Прямая ссылка — плеер
+                    resolvedUrl.startsWith("http") && !resolvedUrl.contains("magnet:?") ->
+                        playDirectUrl(result, resolvedUrl)
+                    // Magnet — торрент
+                    resolvedUrl.contains("magnet:") ->
+                        startTorrent(resolvedUrl)
                 }
             } catch (e: Exception) {
-                _sourceStatuses.update { map ->
-                    map + (source to SourceStatus(error = "Play failed: ${e.message}"))
-                }
+                Log.e("TorrentVM", "playOrDownload failed: ${e.message}")
             } finally {
                 _playingId.value = null
             }
         }
     }
+
+    fun playArchiveFile(file: ArchiveFile) {
+        _showArchiveDialog.value = false
+        val result = _pendingResult.value ?: return
+        viewModelScope.launch {
+            playDirectUrl(result, file.url)
+        }
+    }
+
+    fun dismissArchiveDialog() {
+        _showArchiveDialog.value = false
+        _archiveFiles.value = emptyList()
+        _pendingResult.value = null
+    }
+
+    private suspend fun playDirectUrl(result: TorrentResult, url: String) {
+        val track = Track(
+            id = result.id,
+            title = result.title,
+            artist = result.artist ?: result.source,
+            album = result.album ?: result.source,
+            duration = 0L,
+            uri = url,
+            artworkUri = null
+        )
+        Log.d("TorrentVM", "Playing: $url")
+        player.playTrack(track)
+    }
+
+    private fun startTorrent(magnet: String) {
+        context.startForegroundService(
+            Intent(context, TorrentDownloadService::class.java).apply {
+                action = TorrentDownloadService.ACTION_ADD_MAGNET
+                putExtra(TorrentDownloadService.EXTRA_MAGNET, magnet)
+            }
+        )
+    }
+
+    private fun findSource(result: TorrentResult): SearchSource =
+        SearchSource.entries.find {
+            it.name.equals(result.source, ignoreCase = true) ||
+            it.meta.displayName.equals(result.source, ignoreCase = true) ||
+            result.source.contains(it.name, ignoreCase = true)
+        } ?: SearchSource.ARCHIVE
 
     fun pause(infoHash: String) = context.startService(
         Intent(context, TorrentDownloadService::class.java).apply {
