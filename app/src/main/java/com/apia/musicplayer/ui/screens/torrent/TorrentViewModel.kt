@@ -28,7 +28,6 @@ data class SourceStatus(
     val durationMs: Long = 0
 )
 
-// Файлы в архивной папке для выбора
 data class ArchiveFile(val name: String, val url: String, val size: Long = 0)
 
 @HiltViewModel
@@ -48,8 +47,10 @@ class TorrentViewModel @Inject constructor(
     val sourceStatuses = _sourceStatuses.asStateFlow()
     private val _playingId = MutableStateFlow<String?>(null)
     val playingId = _playingId.asStateFlow()
+    private val _toast = MutableStateFlow<String?>(null)
+    val toast = _toast.asStateFlow()
 
-    // Диалог выбора файла из архивной папки
+    // Archive file picker
     private val _archiveFiles = MutableStateFlow<List<ArchiveFile>>(emptyList())
     val archiveFiles = _archiveFiles.asStateFlow()
     private val _showArchiveDialog = MutableStateFlow(false)
@@ -60,12 +61,13 @@ class TorrentViewModel @Inject constructor(
     val enabledSources get() = aggregator.enabledSources
 
     fun onQueryChange(q: String) { query.value = q }
+    fun clearToast() { _toast.value = null }
 
     fun search() {
         val q = query.value.trim()
         if (q.isBlank()) return
         val sources = aggregator.enabledSources.toSet()
-        if (sources.isEmpty()) return
+        if (sources.isEmpty()) { _toast.value = "Enable sources in Settings"; return }
 
         viewModelScope.launch {
             _isLoading.value = true
@@ -74,9 +76,7 @@ class TorrentViewModel @Inject constructor(
 
             aggregator.searchAll(q, sources) { sr: SourceResult ->
                 if (sr.results.isNotEmpty()) {
-                    _results.update { current ->
-                        (current + sr.results).sortedByDescending { it.seeders }
-                    }
+                    _results.update { cur -> (cur + sr.results).sortedByDescending { it.seeders } }
                 }
                 _sourceStatuses.update { map ->
                     map + (sr.source to SourceStatus(
@@ -88,6 +88,8 @@ class TorrentViewModel @Inject constructor(
                 }
             }
             _isLoading.value = false
+            val total = _results.value.size
+            if (total == 0) _toast.value = "No results found"
         }
     }
 
@@ -96,41 +98,47 @@ class TorrentViewModel @Inject constructor(
             _playingId.value = result.id
             val source = findSource(result)
             try {
-                // Для Archive.org — сначала загружаем список файлов
-                if (result.source == "Archive.org" || result.source == "ARC") {
+                // Archive.org — показываем список файлов
+                if (result.source.contains("Archive", ignoreCase = true)) {
                     val files = (aggregator.archive as? ArchiveOrgProvider)
                         ?.getFileList(result) ?: emptyList()
-                    if (files.size == 1) {
-                        // Один файл — играем сразу
-                        playDirectUrl(result, files[0].url)
-                    } else if (files.isNotEmpty()) {
-                        // Несколько файлов — показываем диалог выбора
-                        _pendingResult.value = result
-                        _archiveFiles.value = files
-                        _showArchiveDialog.value = true
-                        _playingId.value = null
-                        return@launch
-                    } else {
-                        // Файлов нет — пробуем getMagnet
-                        val url = aggregator.getMagnet(result, source)
-                        playDirectUrl(result, url)
+                    when {
+                        files.size == 1 -> playDirect(result, files[0].url)
+                        files.isNotEmpty() -> {
+                            _pendingResult.value = result
+                            _archiveFiles.value = files
+                            _showArchiveDialog.value = true
+                            _playingId.value = null
+                            return@launch
+                        }
+                        else -> _toast.value = "No audio files found in this collection"
                     }
                     return@launch
                 }
 
-                val resolvedUrl = aggregator.getMagnet(result, source)
-                Log.d("TorrentVM", "Resolved: $resolvedUrl")
+                val resolved = try {
+                    aggregator.getMagnet(result, source)
+                } catch (e: Exception) {
+                    _toast.value = "Failed to resolve: ${e.message?.take(60)}"
+                    return@launch
+                }
+
+                Log.d("TorrentVM", "resolved=$resolved source=$source")
 
                 when {
-                    // Прямая ссылка — плеер
-                    resolvedUrl.startsWith("http") && !resolvedUrl.contains("magnet:?") ->
-                        playDirectUrl(result, resolvedUrl)
-                    // Magnet — торрент
-                    resolvedUrl.contains("magnet:") ->
-                        startTorrent(resolvedUrl)
+                    // Прямая ссылка — играем
+                    resolved.startsWith("http") && !resolved.contains("magnet:?") -> {
+                        playDirect(result, resolved)
+                    }
+                    // Magnet — скачиваем через торрент
+                    resolved.contains("magnet:") -> {
+                        startTorrent(resolved, result.title)
+                    }
+                    else -> _toast.value = "Cannot play: unsupported URL"
                 }
             } catch (e: Exception) {
-                Log.e("TorrentVM", "playOrDownload failed: ${e.message}")
+                Log.e("TorrentVM", "playOrDownload: ${e.message}")
+                _toast.value = "Error: ${e.message?.take(80)}"
             } finally {
                 _playingId.value = null
             }
@@ -140,9 +148,7 @@ class TorrentViewModel @Inject constructor(
     fun playArchiveFile(file: ArchiveFile) {
         _showArchiveDialog.value = false
         val result = _pendingResult.value ?: return
-        viewModelScope.launch {
-            playDirectUrl(result, file.url)
-        }
+        viewModelScope.launch { playDirect(result, file.url) }
     }
 
     fun dismissArchiveDialog() {
@@ -151,27 +157,27 @@ class TorrentViewModel @Inject constructor(
         _pendingResult.value = null
     }
 
-    private suspend fun playDirectUrl(result: TorrentResult, url: String) {
-        val track = Track(
+    private suspend fun playDirect(result: TorrentResult, url: String) {
+        Log.d("TorrentVM", "Playing: $url")
+        player.playTrack(Track(
             id = result.id,
             title = result.title,
             artist = result.artist ?: result.source,
             album = result.album ?: result.source,
             duration = 0L,
-            uri = url,
-            artworkUri = null
-        )
-        Log.d("TorrentVM", "Playing: $url")
-        player.playTrack(track)
+            uri = url
+        ))
+        _toast.value = "Playing: ${result.title.take(40)}"
     }
 
-    private fun startTorrent(magnet: String) {
+    private fun startTorrent(magnet: String, name: String) {
         context.startForegroundService(
             Intent(context, TorrentDownloadService::class.java).apply {
                 action = TorrentDownloadService.ACTION_ADD_MAGNET
                 putExtra(TorrentDownloadService.EXTRA_MAGNET, magnet)
             }
         )
+        _toast.value = "Download started: ${name.take(40)}"
     }
 
     private fun findSource(result: TorrentResult): SearchSource =
