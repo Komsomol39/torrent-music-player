@@ -20,6 +20,7 @@ fun MusicPlayerApp() {
     Scaffold(
         bottomBar = {
             Column {
+                // MiniPlayer показываем на всех экранах кроме самого плеера
                 if (currentRoute != Screen.Player.route) {
                     MiniPlayer(onClick = { navController.navigate(Screen.Player.route) })
                 }
@@ -37,7 +38,8 @@ fun MusicPlayerApp() {
                         label = { Text("Search") }
                     )
                     NavigationBarItem(
-                        selected = currentRoute == Screen.Torrent.route || currentRoute == Screen.Downloads.route,
+                        selected = currentRoute == Screen.Torrent.route ||
+                                   currentRoute == Screen.Downloads.route,
                         onClick = { navController.navigate(Screen.Torrent.route) },
                         icon = { Icon(Icons.Default.TravelExplore, null) },
                         label = { Text("Find") }
