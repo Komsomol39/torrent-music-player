@@ -31,58 +31,91 @@ fun MiniPlayer(
         shadowElevation = 8.dp
     ) {
         Column {
-            // Progress bar
-            LinearProgressIndicator(
-                progress = { state.progress },
-                modifier = Modifier.fillMaxWidth().height(2.dp),
-                color = MaterialTheme.colorScheme.primary,
-            )
+            // Прогресс-бар воспроизведения
+            if (state.durationMs > 0) {
+                LinearProgressIndicator(
+                    progress = { state.progress },
+                    modifier = Modifier.fillMaxWidth().height(2.dp),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            } else {
+                // Идёт буферизация (стрим без известной длины)
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth().height(2.dp),
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
+
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Artwork
                 AlbumArtwork(
                     uri = track.artworkUri,
                     modifier = Modifier.size(40.dp).clip(RoundedCornerShape(6.dp))
                 )
-                Spacer(Modifier.width(12.dp))
-                // Track info
+                Spacer(Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = track.title,
+                        track.title,
                         style = MaterialTheme.typography.bodyMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Text(
-                        text = track.artist,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            track.artist,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        // Показываем "STREAM" если нет известной длины
+                        if (state.durationMs <= 0 && state.isPlaying) {
+                            Text(
+                                "● LIVE",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        } else if (state.durationMs > 0) {
+                            val pos = formatMs(state.currentPositionMs)
+                            val dur = formatMs(state.durationMs)
+                            Text(
+                                "$pos / $dur",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
-                // Controls
                 IconButton(onClick = { viewModel.skipPrevious() }) {
-                    Icon(Icons.Default.SkipPrevious, "Previous")
+                    Icon(Icons.Default.SkipPrevious, "Prev", modifier = Modifier.size(20.dp))
                 }
                 IconButton(
                     onClick = { viewModel.togglePlayPause() },
-                    modifier = Modifier.size(40.dp).background(
-                        MaterialTheme.colorScheme.primary, CircleShape
-                    )
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape)
                 ) {
                     Icon(
                         if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        "Play/Pause",
-                        tint = MaterialTheme.colorScheme.onPrimary
+                        "Play",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(22.dp)
                     )
                 }
                 IconButton(onClick = { viewModel.skipNext() }) {
-                    Icon(Icons.Default.SkipNext, "Next")
+                    Icon(Icons.Default.SkipNext, "Next", modifier = Modifier.size(20.dp))
                 }
             }
         }
     }
+}
+
+private fun formatMs(ms: Long): String {
+    val s = ms / 1000
+    return "%d:%02d".format(s / 60, s % 60)
 }
