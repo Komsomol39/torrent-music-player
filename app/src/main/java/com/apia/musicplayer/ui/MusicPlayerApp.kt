@@ -18,15 +18,11 @@ fun MusicPlayerApp() {
     val navController = rememberNavController()
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
 
-    // Навигация с сохранением стейта — ключ к тому что
-    // результаты поиска не сбрасываются при смене вкладки
-    fun navigateSaving(route: String) {
+    fun go(route: String) {
         navController.navigate(route) {
-            popUpTo(navController.graph.findStartDestination().id) {
-                saveState = true   // сохраняем стейт при уходе
-            }
+            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true
-            restoreState = true    // восстанавливаем стейт при возврате
+            restoreState = true
         }
     }
 
@@ -39,26 +35,31 @@ fun MusicPlayerApp() {
                 NavigationBar {
                     NavigationBarItem(
                         selected = currentRoute == Screen.Library.route,
-                        onClick = { navigateSaving(Screen.Library.route) },
+                        onClick = { go(Screen.Library.route) },
                         icon = { Icon(Icons.Default.LibraryMusic, null) },
                         label = { Text("Library") }
                     )
                     NavigationBarItem(
                         selected = currentRoute == Screen.Search.route,
-                        onClick = { navigateSaving(Screen.Search.route) },
+                        onClick = { go(Screen.Search.route) },
                         icon = { Icon(Icons.Default.Search, null) },
                         label = { Text("Search") }
                     )
                     NavigationBarItem(
-                        selected = currentRoute == Screen.Torrent.route ||
-                                   currentRoute == Screen.Downloads.route,
-                        onClick = { navigateSaving(Screen.Torrent.route) },
+                        selected = currentRoute == Screen.Torrent.route,
+                        onClick = { go(Screen.Torrent.route) },
                         icon = { Icon(Icons.Default.TravelExplore, null) },
                         label = { Text("Find") }
                     )
                     NavigationBarItem(
+                        selected = currentRoute == Screen.Downloads.route,
+                        onClick = { go(Screen.Downloads.route) },
+                        icon = { Icon(Icons.Default.Download, null) },
+                        label = { Text("Downloads") }
+                    )
+                    NavigationBarItem(
                         selected = currentRoute == Screen.Settings.route,
-                        onClick = { navigateSaving(Screen.Settings.route) },
+                        onClick = { go(Screen.Settings.route) },
                         icon = { Icon(Icons.Default.Settings, null) },
                         label = { Text("Settings") }
                     )
