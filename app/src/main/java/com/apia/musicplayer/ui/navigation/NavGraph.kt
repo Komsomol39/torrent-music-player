@@ -37,6 +37,7 @@ fun MusicNavGraph(navController: NavHostController) {
         composable(Screen.Search.route) {
             SearchScreen(onTrackClick = { navController.navigate(Screen.Player.route) })
         }
+        // Torrent — keepState через restoreState
         composable(Screen.Torrent.route) { TorrentSearchScreen() }
         composable(Screen.Downloads.route) { TorrentDownloadsScreen() }
         composable(Screen.Equalizer.route) { EqualizerScreen() }
