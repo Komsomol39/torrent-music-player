@@ -3,9 +3,7 @@ package com.apia.musicplayer.data.search
 import android.util.Log
 import com.apia.musicplayer.domain.model.TorrentResult
 import okhttp3.*
-import okhttp3.MediaType.Companion.toMediaType
 import org.jsoup.Jsoup
-import java.net.URLEncoder
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -19,133 +17,129 @@ class RuTrackerProvider @Inject constructor(
     private var cookies: String? = null
     var isLoggedIn = false
 
-    private val headers = mapOf(
-        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language" to "ru-RU,ru;q=0.9,en;q=0.8",
-        "Origin" to "https://rutracker.org",
-        "Referer" to "https://rutracker.org/forum/login.php"
-    )
+    private val ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
     suspend fun login(username: String, password: String): Boolean {
         return try {
-            // Шаг 1: получаем страницу логина (нужно для cap_sid и формы)
-            val loginPage = get("$baseUrl/login.php") ?: return false
-            val doc = Jsoup.parse(loginPage)
-            val capSid = doc.selectFirst("input[name=cap_sid]")?.attr("value") ?: ""
-            val capCode = doc.selectFirst("input[name^=cap_code]")?.attr("name") ?: ""
+            // Шаг 1: загружаем страницу логина — получаем cap_sid
+            val loginPageReq = Request.Builder()
+                .url("$baseUrl/login.php")
+                .header("User-Agent", ua)
+                .build()
+            val loginHtml = client.newCall(loginPageReq).execute().use { it.body?.string() ?: "" }
+            val loginDoc = Jsoup.parse(loginHtml)
+            val capSid = loginDoc.selectFirst("input[name=cap_sid]")?.attr("value") ?: ""
+            val capCodeName = loginDoc.selectFirst("input[name^=cap_code_")?.attr("name") ?: ""
+            Log.d("RuTracker", "cap_sid=$capSid capCodeName=$capCodeName")
 
-            // Шаг 2: POST логин
+            // Шаг 2: POST с кредами — без авторедиректа чтобы перехватить куки
             val formBody = FormBody.Builder()
                 .add("login_username", username)
                 .add("login_password", password)
-                .add("login", "Вход")
+                .add("login", "%E2%E2%EE%E4")
                 .apply {
                     if (capSid.isNotBlank()) add("cap_sid", capSid)
-                    if (capCode.isNotBlank()) add(capCode, "")
+                    if (capCodeName.isNotBlank()) add(capCodeName, "")
                 }
                 .build()
 
-            val req = Request.Builder()
-                .url("$baseUrl/login.php")
-                .post(formBody)
-                .apply { headers.forEach { (k, v) -> header(k, v) } }
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .build()
+            val noRedirect = client.newBuilder().followRedirects(false).build()
+            val resp = noRedirect.newCall(
+                Request.Builder()
+                    .url("$baseUrl/login.php")
+                    .post(formBody)
+                    .header("User-Agent", ua)
+                    .header("Referer", "$baseUrl/login.php")
+                    .header("Origin", "https://rutracker.org")
+                    .build()
+            ).execute()
 
-            // Не следуем редиректу автоматически — нужно собрать куки
-            val noRedirectClient = client.newBuilder()
-                .followRedirects(false)
-                .build()
-
-            val resp = noRedirectClient.newCall(req).execute()
+            Log.d("RuTracker", "Login HTTP ${resp.code}")
             val setCookies = resp.headers("Set-Cookie")
-            Log.d("RuTracker", "Login response: ${resp.code}, cookies: $setCookies")
+            Log.d("RuTracker", "Cookies: $setCookies")
 
-            // Собираем все куки
+            // Собираем куки
             val cookieMap = mutableMapOf<String, String>()
-            setCookies.forEach { header ->
-                val parts = header.split(";")[0].trim()
-                val (name, value) = parts.split("=", limit = 2).let {
-                    it[0] to (it.getOrElse(1) { "" })
+            setCookies.forEach { h ->
+                val pair = h.split(";")[0].trim()
+                val idx = pair.indexOf('=')
+                if (idx > 0) {
+                    cookieMap[pair.substring(0, idx)] = pair.substring(idx + 1)
                 }
-                cookieMap[name] = value
             }
+            resp.close()
 
-            // bb_session — признак успешного логина
-            val bbSession = cookieMap["bb_session"]
-            Log.d("RuTracker", "bb_session: $bbSession")
+            val session = cookieMap["bb_session"]
+            Log.d("RuTracker", "bb_session=$session")
 
-            if (bbSession != null && bbSession.isNotBlank() && bbSession != "deleted") {
+            if (!session.isNullOrBlank() && session != "deleted") {
                 cookies = cookieMap.entries.joinToString("; ") { "${it.key}=${it.value}" }
                 isLoggedIn = true
-                Log.d("RuTracker", "Login successful")
                 true
             } else {
-                // Проверяем тело ответа на ошибку
-                val body = resp.body?.string() ?: ""
-                val errMsg = Jsoup.parse(body).selectFirst(".login-form-errors")?.text()
+                // Читаем ошибку из тела
+                val errBody = client.newCall(
+                    Request.Builder().url("$baseUrl/login.php")
+                        .header("User-Agent", ua)
+                        .apply { cookies?.let { header("Cookie", it) } }
+                        .build()
+                ).execute().use { it.body?.string() ?: "" }
+                val errMsg = Jsoup.parse(errBody).selectFirst(".login-form-errors, .mrg_16")?.text() ?: "Unknown error"
                 Log.w("RuTracker", "Login failed: $errMsg")
                 false
             }
         } catch (e: Exception) {
             Log.e("RuTracker", "Login exception: ${e.message}")
-            false
+            throw Exception("RuTracker: ${e.message}")
         }
     }
 
     override suspend fun search(query: String): List<TorrentResult> {
-        val encoded = URLEncoder.encode(query, "UTF-8")
-        // f= список музыкальных форумов RuTracker
+        val encoded = java.net.URLEncoder.encode(query, "UTF-8")
         val url = "$baseUrl/tracker.php?nm=$encoded&f=768,782,793,794,795,799,800,1260,1299"
         val html = get(url) ?: return emptyList()
         val doc = Jsoup.parse(html)
         val results = mutableListOf<TorrentResult>()
-
         doc.select("tr.tCenter.hl-tr").forEach { row ->
             val titleEl = row.selectFirst("td.t-title a.tLink") ?: return@forEach
             val title = titleEl.text()
             val href = titleEl.attr("href")
-            val topicId = Regex("t=(\\d+)").find(href)?.groupValues?.get(1) ?: return@forEach
-            val seeders = row.selectFirst("td.seedmed b")?.text()?.toIntOrNull() ?: 0
+            val topicId = href.substringAfter("t=").substringBefore("&").trim()
+            if (topicId.isBlank()) return@forEach
+            val seeders  = row.selectFirst("td.seedmed b")?.text()?.toIntOrNull() ?: 0
             val leechers = row.selectFirst("td.leechmed b")?.text()?.toIntOrNull() ?: 0
             val sizeText = row.selectFirst("td.tor-size")?.text() ?: ""
             results += TorrentResult(
                 id = "rutracker_$topicId",
                 title = title,
                 artist = title.substringBefore(" - ").takeIf { title.contains(" - ") },
-                album = title.substringAfter(" - ").takeIf { title.contains(" - ") },
-                year = Regex("\\b(19|20)\\d{2}\\b").find(title)?.value?.toIntOrNull(),
+                album  = title.substringAfter(" - ").takeIf  { title.contains(" - ") },
+                year   = null,
                 seeders = seeders, leechers = leechers,
                 sizeBytes = parseSize(sizeText),
                 magnetLink = "$baseUrl/viewtopic.php?t=$topicId",
                 source = "RuTracker"
             )
         }
-        Log.d("RuTracker", "Found ${results.size} results for '$query'")
+        Log.d("RuTracker", "Found ${results.size} for '$query'")
         return results.sortedByDescending { it.seeders }
     }
 
     override suspend fun getMagnet(result: TorrentResult): String {
         val html = get(result.magnetLink) ?: return result.magnetLink
-        val doc = Jsoup.parse(html)
-        return doc.selectFirst("a.magnet-link")?.attr("href")
-            ?: doc.selectFirst("a[href^=magnet:]")?.attr("href")
-            ?: result.magnetLink
+        return Jsoup.parse(html)
+            .selectFirst("a.magnet-link, a[href^=magnet:]")
+            ?.attr("href") ?: result.magnetLink
     }
 
-    private fun get(url: String): String? {
-        return try {
-            val req = Request.Builder().url(url)
-                .apply { headers.forEach { (k, v) -> header(k, v) } }
+    private fun get(url: String): String? = try {
+        client.newCall(
+            Request.Builder().url(url)
+                .header("User-Agent", ua)
                 .apply { cookies?.let { header("Cookie", it) } }
                 .build()
-            client.newCall(req).execute().use { it.body?.string() }
-        } catch (e: Exception) {
-            Log.e("RuTracker", "GET $url failed: ${e.message}")
-            null
-        }
-    }
+        ).execute().use { it.body?.string() }
+    } catch (e: Exception) { null }
 
     private fun parseSize(s: String): Long {
         val n = Regex("[0-9.]+").find(s)?.value?.toDoubleOrNull() ?: return 0
