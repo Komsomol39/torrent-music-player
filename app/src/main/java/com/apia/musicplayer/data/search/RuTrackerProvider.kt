@@ -115,7 +115,7 @@ class RuTrackerProvider @Inject constructor(
                 title = title,
                 artist = title.substringBefore(" - ").takeIf { title.contains(" - ") },
                 album = title.substringAfter(" - ").takeIf { title.contains(" - ") },
-                year = Regex("\\\b(19|20)\\\d{2}\\\b").find(title)?.value?.toIntOrNull(),
+                year = Regex("\\b(19|20)\\d{2}\\b").find(title)?.value?.toIntOrNull(),
                 seeders = seeders, leechers = leechers,
                 sizeBytes = parseSize(sizeText),
                 magnetLink = "$baseUrl/viewtopic.php?t=$topicId",
