@@ -16,24 +16,25 @@ data class SourceResult(
 
 @Singleton
 class SearchAggregator @Inject constructor(
-    val rutracker: RuTrackerProvider,
-    val rutor:     RuTorProvider,
-    val kinozal:   KinozalProvider,
-    val nnmclub:   NnmClubProvider,
-    val unionpeer: UnionPeerProvider,
-    val tpb:       TpbProvider,
-    val nyaa:      NyaaProvider,
-    val x1337:     X1337Provider,
-    val vk:        VkMusicProvider,
-    val youtube:   YouTubeProvider,
+    val rutracker:  RuTrackerProvider,
+    val rutor:      RuTorProvider,
+    val kinozal:    KinozalProvider,
+    val nnmclub:    NnmClubProvider,
+    val unionpeer:  UnionPeerProvider,
+    val tpb:        TpbProvider,
+    val nyaa:       NyaaProvider,
+    val x1337:      X1337Provider,
+    val openru:     OpenRuProvider,
+    val vk:         VkMusicProvider,
+    val youtube:    YouTubeProvider,
     val soundcloud: SoundCloudProvider,
-    val deezer:    DeezerProvider,
-    val yandex:    YandexMusicProvider,
-    val zaycev:    ZaycevProvider,
-    val archive:   ArchiveOrgProvider,
-    val bandcamp:  BandcampProvider,
-    val jamendo:   JamendoProvider,
-    val fma:       FmaProvider
+    val deezer:     DeezerProvider,
+    val yandex:     YandexMusicProvider,
+    val zaycev:     ZaycevProvider,
+    val archive:    ArchiveOrgProvider,
+    val bandcamp:   BandcampProvider,
+    val jamendo:    JamendoProvider,
+    val fma:        FmaProvider
 ) {
     val enabledSources = mutableSetOf(
         *SearchSource.entries.filter { it.meta.defaultEnabled }.toTypedArray()
@@ -48,6 +49,7 @@ class SearchAggregator @Inject constructor(
         SearchSource.TPB        -> tpb
         SearchSource.NYAA       -> nyaa
         SearchSource.X1337      -> x1337
+        SearchSource.OPENRU     -> openru
         SearchSource.VK         -> vk
         SearchSource.YOUTUBE    -> youtube
         SearchSource.SOUNDCLOUD -> soundcloud
@@ -60,16 +62,12 @@ class SearchAggregator @Inject constructor(
         SearchSource.FMA        -> fma
     }
 
-    /**
-     * Параллельный поиск. Возвращает SourceResult для каждого источника —
-     * включая ошибки, чтобы UI мог показать что именно не сработало.
-     */
     suspend fun searchAll(
         query: String,
         sources: Set<SearchSource> = enabledSources,
         onResult: (SourceResult) -> Unit
     ) = coroutineScope {
-        Log.d("SearchAggregator", "Searching ${sources.size} sources for: $query")
+        Log.d("Aggregator", "Searching ${sources.size} sources: $query")
         sources.map { source ->
             async(Dispatchers.IO) {
                 val t0 = System.currentTimeMillis()
@@ -81,13 +79,12 @@ class SearchAggregator @Inject constructor(
                 try {
                     val results = provider.search(query)
                     val ms = System.currentTimeMillis() - t0
-                    Log.d("SearchAggregator", "${source.name}: ${results.size} results in ${ms}ms")
+                    Log.d("Aggregator", "${source.name}: ${results.size} in ${ms}ms")
                     onResult(SourceResult(source, results, durationMs = ms))
                 } catch (e: Exception) {
                     val ms = System.currentTimeMillis() - t0
-                    val err = e.message ?: e.javaClass.simpleName
-                    Log.w("SearchAggregator", "${source.name} failed: $err")
-                    onResult(SourceResult(source, error = err, durationMs = ms))
+                    Log.w("Aggregator", "${source.name} error: ${e.message}")
+                    onResult(SourceResult(source, error = e.message ?: e.javaClass.simpleName, durationMs = ms))
                 }
             }
         }.awaitAll()
