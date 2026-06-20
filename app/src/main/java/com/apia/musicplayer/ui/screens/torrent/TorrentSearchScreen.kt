@@ -1,5 +1,6 @@
 package com.apia.musicplayer.ui.screens.torrent
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -30,6 +31,54 @@ fun TorrentSearchScreen(viewModel: TorrentViewModel = hiltViewModel()) {
     val downloads by viewModel.downloads.collectAsState()
     val playingId by viewModel.playingId.collectAsState()
     val enabledSources = viewModel.enabledSources
+    val showArchiveDialog by viewModel.showArchiveDialog.collectAsState()
+    val archiveFiles by viewModel.archiveFiles.collectAsState()
+
+    // Диалог выбора файла из Archive.org
+    if (showArchiveDialog && archiveFiles.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissArchiveDialog() },
+            title = { Text("Select track") },
+            text = {
+                LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                    items(archiveFiles, key = { it.url }) { file ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.playArchiveFile(file) }
+                                .padding(vertical = 10.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.MusicNote, null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    file.name.substringBeforeLast("."),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 2, overflow = TextOverflow.Ellipsis
+                                )
+                                if (file.size > 0) {
+                                    Text(file.size.formatSize(),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            Icon(Icons.Default.PlayArrow, "Play",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp))
+                        }
+                        HorizontalDivider(thickness = 0.5.dp)
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissArchiveDialog() }) { Text("Cancel") }
+            }
+        )
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Search bar
@@ -58,6 +107,7 @@ fun TorrentSearchScreen(viewModel: TorrentViewModel = hiltViewModel()) {
             }
         }
 
+        // No sources warning
         if (enabledSources.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -69,7 +119,7 @@ fun TorrentSearchScreen(viewModel: TorrentViewModel = hiltViewModel()) {
             return
         }
 
-        // Source chips
+        // Source status chips
         if (sourceStatuses.isNotEmpty()) {
             LazyRow(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
@@ -82,28 +132,29 @@ fun TorrentSearchScreen(viewModel: TorrentViewModel = hiltViewModel()) {
             Spacer(Modifier.height(4.dp))
         }
 
+        // Results / empty states
         when {
             results.isEmpty() && !isLoading && sourceStatuses.isNotEmpty() -> {
                 val errCount = sourceStatuses.count { it.value.error != null }
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(24.dp)) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(24.dp)) {
                         Icon(Icons.Default.SearchOff, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("No results found", style = MaterialTheme.typography.titleMedium)
-                        if (errCount > 0) Text("$errCount sources had errors — check Settings", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("No results", style = MaterialTheme.typography.titleMedium)
+                        if (errCount > 0) Text("$errCount sources had errors — see Settings", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
-
             results.isEmpty() && !isLoading -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Icon(Icons.Default.MusicNote, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text("${enabledSources.size} sources ready", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("TPB, Nyaa, Archive.org — no login needed", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("TPB, Nyaa, Archive.org work without login", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
-
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
@@ -142,7 +193,9 @@ fun SourceChip(source: SearchSource, status: SourceStatus) {
         else -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
     }
     Surface(shape = MaterialTheme.shapes.small, color = bg, modifier = Modifier.height(28.dp)) {
-        Row(modifier = Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(modifier = Modifier.padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(source.meta.emoji, style = MaterialTheme.typography.labelSmall)
             Text(source.meta.displayName, style = MaterialTheme.typography.labelSmall, color = fg)
             when {
@@ -165,9 +218,13 @@ fun TorrentResultItem(
     val isDirect = result.magnetLink.startsWith("http") && !result.magnetLink.contains("magnet:?")
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(40.dp)) {
+            Surface(shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(40.dp)) {
                 Box(contentAlignment = Alignment.Center) {
-                    Text(result.source.take(3).uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Text(result.source.take(3).uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
             }
             Spacer(Modifier.width(10.dp))
@@ -182,14 +239,16 @@ fun TorrentResultItem(
                 }
             }
             when {
-                isPlaying || isDownloading -> CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                else -> IconButton(onClick = onAction) {
-                    Icon(
-                        if (isDirect) Icons.Default.PlayCircle else Icons.Default.Download,
-                        if (isDirect) "Play" else "Download",
-                        tint = if (isDirect) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                    )
-                }
+                isPlaying || isDownloading ->
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                isDirect ->
+                    IconButton(onClick = onAction) {
+                        Icon(Icons.Default.PlayCircle, "Play", tint = MaterialTheme.colorScheme.primary)
+                    }
+                else ->
+                    IconButton(onClick = onAction) {
+                        Icon(Icons.Default.Download, "Download", tint = MaterialTheme.colorScheme.onSurface)
+                    }
             }
         }
     }
