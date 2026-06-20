@@ -16,6 +16,7 @@ data class SourceResult(
 
 @Singleton
 class SearchAggregator @Inject constructor(
+    val torapi:     TorApiProvider,
     val rutracker:  RuTrackerProvider,
     val rutor:      RuTorProvider,
     val kinozal:    KinozalProvider,
@@ -41,6 +42,7 @@ class SearchAggregator @Inject constructor(
     )
 
     fun providerFor(source: SearchSource): SearchProvider? = when (source) {
+        SearchSource.TORAPI     -> torapi
         SearchSource.RUTRACKER  -> rutracker
         SearchSource.RUTOR      -> rutor
         SearchSource.KINOZAL    -> kinozal
@@ -67,7 +69,7 @@ class SearchAggregator @Inject constructor(
         sources: Set<SearchSource> = enabledSources,
         onResult: (SourceResult) -> Unit
     ) = coroutineScope {
-        Log.d("Aggregator", "Searching ${sources.size} sources: $query")
+        Log.d("Aggregator", "Searching ${sources.size} sources for: $query")
         sources.map { source ->
             async(Dispatchers.IO) {
                 val t0 = System.currentTimeMillis()
@@ -83,13 +85,15 @@ class SearchAggregator @Inject constructor(
                     onResult(SourceResult(source, results, durationMs = ms))
                 } catch (e: Exception) {
                     val ms = System.currentTimeMillis() - t0
-                    Log.w("Aggregator", "${source.name} error: ${e.message}")
-                    onResult(SourceResult(source, error = e.message ?: e.javaClass.simpleName, durationMs = ms))
+                    Log.w("Aggregator", "${source.name} error (${ms}ms): ${e.message}")
+                    onResult(SourceResult(source, error = e.message?.take(100), durationMs = ms))
                 }
             }
         }.awaitAll()
     }
 
     suspend fun getMagnet(result: TorrentResult, source: SearchSource): String =
-        providerFor(source)?.getMagnet(result) ?: result.magnetLink
+        withContext(Dispatchers.IO) {
+            providerFor(source)?.getMagnet(result) ?: result.magnetLink
+        }
 }
