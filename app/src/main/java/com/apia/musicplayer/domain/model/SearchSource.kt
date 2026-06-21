@@ -21,70 +21,75 @@ data class SourceMeta(
 enum class AuthType { NONE, LOGIN_PASS, TOKEN, OPTIONAL_TOKEN }
 
 enum class SearchSource {
-    TORAPI,
-    RUTRACKER, RUTOR, KINOZAL,
-    NNMCLUB, UNIONPEER,
+    // РФ — дефолтные без логина
+    TORAPI, RUTOR,
+    // РФ — требуют логин
+    RUTRACKER, KINOZAL,
+    // СНГ — требуют логин
+    NNMCLUB,
+    // Мировые — без логина
     TPB, NYAA, X1337, OPENRU,
-    VK, YOUTUBE, SOUNDCLOUD, DEEZER, YANDEX, ZAYCEV,
-    ARCHIVE, BANDCAMP, JAMENDO, FMA;
+    // Музыкальные — требуют токен
+    VK, YOUTUBE, SOUNDCLOUD, YANDEX, ZAYCEV,
+    // Отключены по умолчанию — плохой UX
+    DEEZER,   // 30с превью без ARL
+    ARCHIVE,  // медленно, нет прямого скачивания
+    BANDCAMP, JAMENDO, FMA;
 
     val meta: SourceMeta get() = when (this) {
-        TORAPI     -> SourceMeta("RU Torrents",    SourceCategory.RU,    "🇷🇺",
-            "RuTracker+RuTor+Kinozal+NNM — без логина через TorAPI",
+        TORAPI     -> SourceMeta("RU Torrents",   SourceCategory.RU,    "🇷🇺",
+            "RuTracker+RuTor+Kinozal+NNM через TorAPI — без логина",
             "FLAC / MP3 320", AuthType.NONE, defaultEnabled = true)
-        RUTRACKER  -> SourceMeta("RuTracker",      SourceCategory.RU,    "🎸",
-            "Прямой — нужен логин и VPN",
-            "FLAC / MP3 320", AuthType.LOGIN_PASS)
-        RUTOR      -> SourceMeta("RuTor",          SourceCategory.RU,    "🎵",
+        RUTOR      -> SourceMeta("RuTor",         SourceCategory.RU,    "🎵",
             "Без регистрации",
             "Mixed", AuthType.NONE, defaultEnabled = true)
-        KINOZAL    -> SourceMeta("Kinozal",        SourceCategory.RU,    "💿",
+        RUTRACKER  -> SourceMeta("RuTracker",     SourceCategory.RU,    "🎸",
+            "Нужен логин и VPN",
+            "FLAC / MP3 320", AuthType.LOGIN_PASS)
+        KINOZAL    -> SourceMeta("Kinozal",       SourceCategory.RU,    "💿",
             "Высокое качество FLAC, нужен логин",
             "FLAC", AuthType.LOGIN_PASS)
-        NNMCLUB    -> SourceMeta("NNM-Club",       SourceCategory.CIS,   "🌐",
+        NNMCLUB    -> SourceMeta("NNM-Club",      SourceCategory.CIS,   "🌐",
             "СНГ трекер, нужен логин",
             "Mixed", AuthType.LOGIN_PASS)
-        UNIONPEER  -> SourceMeta("UnionPeer",      SourceCategory.CIS,   "🤝",
-            "Без регистрации",
-            "Mixed", AuthType.NONE)
-        TPB        -> SourceMeta("Pirate Bay",     SourceCategory.WORLD, "🏴",
+        TPB        -> SourceMeta("Pirate Bay",    SourceCategory.WORLD, "🏴",
             "JSON API, без регистрации",
             "Mixed", AuthType.NONE, defaultEnabled = true)
-        NYAA       -> SourceMeta("Nyaa.si",        SourceCategory.WORLD, "🌸",
+        NYAA       -> SourceMeta("Nyaa.si",       SourceCategory.WORLD, "🌸",
             "RSS, аниме/джаз/классика",
             "FLAC / MP3", AuthType.NONE, defaultEnabled = true)
-        X1337      -> SourceMeta("1337x",          SourceCategory.WORLD, "🔢",
-            "Большой каталог, scraping",
+        X1337      -> SourceMeta("1337x",         SourceCategory.WORLD, "🔢",
+            "Большой каталог",
             "Mixed", AuthType.NONE)
-        OPENRU     -> SourceMeta("LimeTorrents",   SourceCategory.WORLD, "🧲",
+        OPENRU     -> SourceMeta("LimeTorrents",  SourceCategory.WORLD, "🧲",
             "LimeTorrents + MagnetDL",
             "Mixed", AuthType.NONE)
-        VK         -> SourceMeta("VK Music",       SourceCategory.MUSIC, "💙",
+        VK         -> SourceMeta("VK Music",      SourceCategory.MUSIC, "💙",
             "Прямые MP3, нужен Kate Mobile токен",
             "MP3 320", AuthType.TOKEN)
-        YOUTUBE    -> SourceMeta("YouTube",        SourceCategory.MUSIC, "▶️",
-            "Поиск аудио, API ключ опционален",
+        YOUTUBE    -> SourceMeta("YouTube",       SourceCategory.MUSIC, "▶️",
+            "Поиск аудио",
             "Mixed", AuthType.OPTIONAL_TOKEN)
-        SOUNDCLOUD -> SourceMeta("SoundCloud",     SourceCategory.MUSIC, "🟠",
-            "Инди/электроника, работает без ключа",
+        SOUNDCLOUD -> SourceMeta("SoundCloud",    SourceCategory.MUSIC, "🟠",
+            "Инди/электроника",
             "MP3 128", AuthType.OPTIONAL_TOKEN)
-        DEEZER     -> SourceMeta("Deezer",         SourceCategory.MUSIC, "🎧",
-            "⚠ Только 30с превью без ARL cookie",
-            "Preview 30s", AuthType.OPTIONAL_TOKEN)
-        YANDEX     -> SourceMeta("Яндекс.Музыка",  SourceCategory.MUSIC, "🟡",
-            "Нужен OAuth токен",
+        YANDEX     -> SourceMeta("Яндекс.Музыка", SourceCategory.MUSIC, "🟡",
+            "OAuth токен из браузера",
             "MP3 320", AuthType.TOKEN)
-        ZAYCEV     -> SourceMeta("Зайцев.нет",     SourceCategory.MUSIC, "🐰",
+        ZAYCEV     -> SourceMeta("Зайцев.нет",    SourceCategory.MUSIC, "🐰",
             "Без регистрации",
             "MP3 128", AuthType.NONE)
-        ARCHIVE    -> SourceMeta("Archive.org",    SourceCategory.FREE,  "📚",
+        DEEZER     -> SourceMeta("Deezer",        SourceCategory.MUSIC, "🎧",
+            "⚠ Только 30с превью без ARL cookie. Добавь ARL в настройках.",
+            "Preview 30s", AuthType.OPTIONAL_TOKEN)
+        ARCHIVE    -> SourceMeta("Archive.org",   SourceCategory.FREE,  "📚",
             "⚠ Медленно, нестабильно",
             "FLAC / MP3", AuthType.NONE)
-        BANDCAMP   -> SourceMeta("Bandcamp",       SourceCategory.FREE,  "🎪",
+        BANDCAMP   -> SourceMeta("Bandcamp",      SourceCategory.FREE,  "🎪",
             "Инди артисты",
             "MP3 / FLAC", AuthType.NONE)
-        JAMENDO    -> SourceMeta("Jamendo",        SourceCategory.FREE,  "🎶",
-            "CC музыка, demo ключ встроен",
+        JAMENDO    -> SourceMeta("Jamendo",       SourceCategory.FREE,  "🎶",
+            "CC музыка",
             "MP3 96", AuthType.OPTIONAL_TOKEN)
         FMA        -> SourceMeta("Free Music Archive", SourceCategory.FREE, "🆓",
             "Публичный API",
