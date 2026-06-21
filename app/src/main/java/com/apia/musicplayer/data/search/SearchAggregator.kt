@@ -17,11 +17,10 @@ data class SourceResult(
 @Singleton
 class SearchAggregator @Inject constructor(
     val torapi:     TorApiProvider,
-    val rutracker:  RuTrackerProvider,
     val rutor:      RuTorProvider,
+    val rutracker:  RuTrackerProvider,
     val kinozal:    KinozalProvider,
     val nnmclub:    NnmClubProvider,
-    val unionpeer:  UnionPeerProvider,
     val tpb:        TpbProvider,
     val nyaa:       NyaaProvider,
     val x1337:      X1337Provider,
@@ -29,13 +28,13 @@ class SearchAggregator @Inject constructor(
     val vk:         VkMusicProvider,
     val youtube:    YouTubeProvider,
     val soundcloud: SoundCloudProvider,
-    val deezer:     DeezerProvider,
     val yandex:     YandexMusicProvider,
     val zaycev:     ZaycevProvider,
-    val archive:    ArchiveOrgProvider,
-    val bandcamp:   BandcampProvider,
+    val deezer:     DeezerProvider,
     val jamendo:    JamendoProvider,
-    val fma:        FmaProvider
+    val fma:        FmaProvider,
+    val bandcamp:   BandcampProvider,
+    val archive:    ArchiveOrgProvider
 ) {
     val enabledSources = mutableSetOf(
         *SearchSource.entries.filter { it.meta.defaultEnabled }.toTypedArray()
@@ -43,11 +42,10 @@ class SearchAggregator @Inject constructor(
 
     fun providerFor(source: SearchSource): SearchProvider? = when (source) {
         SearchSource.TORAPI     -> torapi
-        SearchSource.RUTRACKER  -> rutracker
         SearchSource.RUTOR      -> rutor
+        SearchSource.RUTRACKER  -> rutracker
         SearchSource.KINOZAL    -> kinozal
         SearchSource.NNMCLUB    -> nnmclub
-        SearchSource.UNIONPEER  -> unionpeer
         SearchSource.TPB        -> tpb
         SearchSource.NYAA       -> nyaa
         SearchSource.X1337      -> x1337
@@ -55,13 +53,13 @@ class SearchAggregator @Inject constructor(
         SearchSource.VK         -> vk
         SearchSource.YOUTUBE    -> youtube
         SearchSource.SOUNDCLOUD -> soundcloud
-        SearchSource.DEEZER     -> deezer
         SearchSource.YANDEX     -> yandex
         SearchSource.ZAYCEV     -> zaycev
-        SearchSource.ARCHIVE    -> archive
-        SearchSource.BANDCAMP   -> bandcamp
+        SearchSource.DEEZER     -> deezer
         SearchSource.JAMENDO    -> jamendo
         SearchSource.FMA        -> fma
+        SearchSource.BANDCAMP   -> bandcamp
+        SearchSource.ARCHIVE    -> archive
     }
 
     suspend fun searchAll(
@@ -85,7 +83,7 @@ class SearchAggregator @Inject constructor(
                     onResult(SourceResult(source, results, durationMs = ms))
                 } catch (e: Exception) {
                     val ms = System.currentTimeMillis() - t0
-                    Log.w("Aggregator", "${source.name} error (${ms}ms): ${e.message}")
+                    Log.w("Aggregator", "${source.name} error: ${e.message}")
                     onResult(SourceResult(source, error = e.message?.take(100), durationMs = ms))
                 }
             }
