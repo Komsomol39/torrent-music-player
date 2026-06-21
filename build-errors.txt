@@ -1,3 +1,6 @@
-67:> Task :app:compileDebugKotlin FAILED
-68:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/ui/screens/settings/SettingsViewModel.kt:103:29 Unresolved reference: prefs
-83:BUILD FAILED in 3m 27s
+68:> Task :app:compileDebugKotlin FAILED
+69:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/search/SoundCloudProvider.kt:57:53 Returns are not allowed for functions with expression body. Use block body in '{...}'
+70:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/search/SoundCloudProvider.kt:59:65 Returns are not allowed for functions with expression body. Use block body in '{...}'
+71:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/search/SoundCloudProvider.kt:60:36 Returns are not allowed for functions with expression body. Use block body in '{...}'
+72:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/ui/screens/settings/SettingsViewModel.kt:103:29 Unresolved reference: prefs
+87:BUILD FAILED in 3m 19s
