@@ -36,7 +36,6 @@ class SettingsViewModel @Inject constructor(
     val state: StateFlow<SettingsState> = _state.asStateFlow()
 
     companion object {
-        val KEY_TORAPI_URL = stringPreferencesKey("torapi_url")
         val KEY_ENABLED = stringSetPreferencesKey("enabled_sources")
         fun credKey(src: SearchSource, field: String) = stringPreferencesKey("cred_${src.name}_$field")
         fun connKey(src: SearchSource) = booleanPreferencesKey("conn_${src.name}")
@@ -68,8 +67,6 @@ class SettingsViewModel @Inject constructor(
                 isLoaded = true
             )}
             // Применяем кастомный TorAPI URL
-            val torapiUrl = prefs[KEY_TORAPI_URL] ?: ""
-            if (torapiUrl.isNotBlank()) aggregator.torapi.baseUrl = torapiUrl
             aggregator.enabledSources.clear()
             aggregator.enabledSources.addAll(enabled)
             applyCredentials(creds)
