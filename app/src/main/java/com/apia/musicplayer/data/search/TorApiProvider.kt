@@ -4,183 +4,189 @@ import android.util.Log
 import com.apia.musicplayer.domain.model.TorrentResult
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONArray
 import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * TorAPI — публичный агрегатор RU торрент трекеров.
- * https://github.com/Lifailon/TorAPI
+ * TorAPI — публичный агрегатор для RU трекеров без авторизации.
+ * GitHub: https://github.com/Lifailon/TorAPI
  *
- * Публичные инстансы:
- * - https://torapi.vercel.app  (может блокировать)
- * - Пользователь может указать свой в настройках
+ * Публичные инстансы (пробуем по очереди):
+ * - https://torapi.vercel.app
+ * - https://torapi.onrender.com
  *
- * GET /api/torrent/search?query=<q>&provider=<p>
- * Ответ: { "RuTracker": [...], "RuTor": [...], ... }
- * Или массив напрямую.
+ * Endpoints:
+ * GET /api/torrent/search?query=<q>&provider=<p>&limit=20
+ * Провайдеры: rutracker, rutor, kinozal, nnmclub
  */
 @Singleton
 class TorApiProvider @Inject constructor(private val client: OkHttpClient) : SearchProvider {
 
     override val name = "TorAPI (RU)"
 
-    // Публичный инстанс — можно переопределить в настройках
-    var baseUrl = "https://torapi.vercel.app"
+    // Пробуем несколько публичных инстансов
+    private val instances = listOf(
+        "https://torapi.vercel.app",
+        "https://torapi.onrender.com"
+    )
 
-    // Провайдеры TorAPI для музыки
-    private val musicProviders = listOf("rutracker", "rutor", "kinozal", "nnmclub")
+    private val providers = listOf("rutracker", "rutor", "kinozal", "nnmclub")
 
     override suspend fun search(query: String): List<TorrentResult> {
         val enc = java.net.URLEncoder.encode(query, "UTF-8")
         val results = mutableListOf<TorrentResult>()
 
-        // Пробуем каждый провайдер отдельно
-        for (provider in musicProviders) {
-            try {
-                val url = "$baseUrl/api/torrent/search?query=$enc&provider=$provider"
-                val json = get(url) ?: continue
-                val parsed = parse(json, provider)
-                Log.d("TorAPI", "$provider: ${parsed.size} results")
-                results += parsed
-            } catch (e: Exception) {
-                Log.w("TorAPI", "$provider: ${e.message}")
+        for (provider in providers) {
+            var found = false
+            for (base in instances) {
+                try {
+                    val url = "$base/api/torrent/search?query=$enc&provider=$provider&limit=20"
+                    Log.d("TorAPI", "GET $url")
+                    val json = get(url) ?: continue
+                    Log.d("TorAPI", "$provider raw: ${json.take(200)}")
+                    val parsed = parseAny(json, provider)
+                    if (parsed.isNotEmpty()) {
+                        Log.d("TorAPI", "$provider via $base: ${parsed.size} results")
+                        results += parsed
+                        found = true
+                        break
+                    }
+                } catch (e: Exception) {
+                    Log.w("TorAPI", "$provider@$base: ${e.message}")
+                }
             }
+            if (!found) Log.w("TorAPI", "$provider: no results from any instance")
         }
-
-        // Если всё заблокировано — пробуем all провайдеры одним запросом
-        if (results.isEmpty()) {
-            try {
-                val url = "$baseUrl/api/torrent/search?query=$enc"
-                val json = get(url) ?: return emptyList()
-                results += parse(json, "all")
-            } catch (e: Exception) {
-                Log.e("TorAPI", "all: ${e.message}")
-                throw Exception("TorAPI недоступен ($baseUrl). Проверь Settings → RU Torrents")
-            }
-        }
-
         return results.sortedByDescending { it.seeders }
     }
 
-    private fun parse(json: String, provider: String): List<TorrentResult> {
-        if (json.isBlank()) return emptyList()
+    /**
+     * Парсим любой формат который может вернуть TorAPI.
+     * Поддерживаем несколько вариантов структуры.
+     */
+    private fun parseAny(json: String, provider: String): List<TorrentResult> {
+        if (json.isBlank() || json == "null") return emptyList()
         return try {
-            val obj = JSONObject(json)
-
-            // Формат 1: { "RuTracker": [...], "RuTor": [...] }
-            val keys = listOf("RuTracker","RuTor","Kinozal","NoNameClub","rutracker","rutor","kinozal","nnmclub")
-            val combined = mutableListOf<TorrentResult>()
-            for (key in keys) {
-                if (obj.has(key)) {
-                    combined += parseArray(obj.getJSONArray(key), key)
+            when {
+                // Массив напрямую
+                json.trimStart().startsWith("[") -> {
+                    parseArray(JSONArray(json), provider)
                 }
+                // Объект с полем result/data/items/torrents
+                json.trimStart().startsWith("{") -> {
+                    val obj = JSONObject(json)
+                    val arr = obj.optJSONArray("result")
+                        ?: obj.optJSONArray("data")
+                        ?: obj.optJSONArray("items")
+                        ?: obj.optJSONArray("torrents")
+                        ?: return emptyList()
+                    parseArray(arr, provider)
+                }
+                else -> emptyList()
             }
-            if (combined.isNotEmpty()) return combined
-
-            // Формат 2: { "result": [...] }
-            if (obj.has("result")) return parseArray(obj.getJSONArray("result"), provider)
-
-            // Формат 3: { "data": [...] }
-            if (obj.has("data")) return parseArray(obj.getJSONArray("data"), provider)
-
-            emptyList()
         } catch (e: Exception) {
-            // Формат 4: прямой массив [...]
-            try {
-                parseArray(org.json.JSONArray(json), provider)
-            } catch (e2: Exception) {
-                Log.e("TorAPI", "Parse failed: ${e.message}")
-                emptyList()
-            }
+            Log.e("TorAPI", "Parse error: ${e.message}
+JSON: ${json.take(300)}")
+            emptyList()
         }
     }
 
-    private fun parseArray(arr: org.json.JSONArray, provider: String): List<TorrentResult> {
+    private fun parseArray(arr: JSONArray, provider: String): List<TorrentResult> {
         return (0 until arr.length()).mapNotNull { i ->
             try {
                 val item = arr.getJSONObject(i)
-                // TorAPI использует разные имена полей
-                val name = item.optString("Name", item.optString("name",
-                    item.optString("title", ""))).ifBlank { return@mapNotNull null }
-                val magnet = item.optString("Magnet", item.optString("magnet", ""))
-                val torrentUrl = item.optString("Torrent", item.optString("torrent", ""))
-                val pageUrl = item.optString("Url", item.optString("url", ""))
-                val seeds = parseNum(item.optString("Seeds", item.optString("seeders","0")))
-                val leech = parseNum(item.optString("Peers", item.optString("leechers","0")))
-                val size  = item.optString("Size", item.optString("size",""))
-                val id    = item.optString("Id", item.optString("id", "${name.hashCode()}"))
+                // TorAPI использует разные ключи в зависимости от провайдера
+                val title = item.optString("Name")
+                    .ifBlank { item.optString("title") }
+                    .ifBlank { item.optString("name") }
+                    .ifBlank { return@mapNotNull null }
 
-                val source = when {
-                    provider.contains("rutracker", true) -> "RuTracker"
-                    provider.contains("rutor", true)     -> "RuTor"
-                    provider.contains("kinozal", true)   -> "Kinozal"
-                    provider.contains("nnm", true) ||
-                    provider.contains("noname", true)    -> "NNM-Club"
-                    else -> provider.replaceFirstChar { it.uppercaseChar() }
-                }
+                val magnet = item.optString("Magnet")
+                    .ifBlank { item.optString("magnet") }
+                    .ifBlank { item.optString("MagnetLink") }
 
-                // Приоритет ссылок: magnet > страница раздачи
-                val link = magnet.ifBlank { pageUrl.ifBlank { torrentUrl } }
-                if (link.isBlank()) return@mapNotNull null
+                val pageUrl = item.optString("Url")
+                    .ifBlank { item.optString("url") }
+                    .ifBlank { item.optString("Link") }
+
+                // Нужен хотя бы один из них
+                if (magnet.isBlank() && pageUrl.isBlank()) return@mapNotNull null
+
+                val seeds = item.optString("Seeds").toIntOrNull()
+                    ?: item.optString("seeders").toIntOrNull()
+                    ?: item.optInt("Seeds", 0)
+
+                val leech = item.optString("Peers").toIntOrNull()
+                    ?: item.optString("leechers").toIntOrNull()
+                    ?: item.optInt("Peers", 0)
+
+                val size = item.optString("Size").ifBlank { item.optString("size") }
 
                 TorrentResult(
-                    id = "${source.take(3)}_$id",
-                    title  = name,
-                    artist = name.substringBefore(" - ").takeIf { name.contains(" - ") },
+                    id = "${provider}_${(title + magnet).hashCode()}",
+                    title  = title,
+                    artist = title.substringBefore(" - ").takeIf { title.contains(" - ") },
                     album  = null, year = null,
                     seeders  = seeds,
                     leechers = leech,
                     sizeBytes = parseSize(size),
-                    magnetLink = link,
-                    source = source
+                    magnetLink = magnet.ifBlank { pageUrl },
+                    source = when (provider) {
+                        "rutracker" -> "RuTracker"
+                        "rutor"     -> "RuTor"
+                        "kinozal"   -> "Kinozal"
+                        "nnmclub"   -> "NNM-Club"
+                        else        -> provider
+                    }
                 )
             } catch (e: Exception) { null }
         }
     }
 
     override suspend fun getMagnet(result: TorrentResult): String {
-        // Уже magnet — возвращаем
         if (result.magnetLink.startsWith("magnet:")) return result.magnetLink
-
-        // Страница раздачи — запрашиваем через TorAPI
-        if (result.magnetLink.startsWith("http")) {
-            try {
-                val topicId = result.id.substringAfter("_")
-                val provider = when (result.source) {
-                    "RuTracker" -> "rutracker"
-                    "RuTor"     -> "rutor"
-                    "Kinozal"   -> "kinozal"
-                    "NNM-Club"  -> "nnmclub"
-                    else        -> return result.magnetLink
-                }
-                val url = "$baseUrl/api/torrent/info?id=$topicId&provider=$provider"
-                val json = get(url) ?: return result.magnetLink
-                val obj = JSONObject(json)
-                val magnet = obj.optString("Magnet", obj.optString("magnet", ""))
-                if (magnet.isNotBlank()) return magnet
-            } catch (e: Exception) {
-                Log.w("TorAPI", "getMagnet: ${e.message}")
-            }
+        // Если это URL страницы — пробуем получить magnet через TorAPI info
+        val pageUrl = result.magnetLink
+        val provider = when (result.source) {
+            "RuTracker" -> "rutracker"
+            "RuTor"     -> "rutor"
+            "Kinozal"   -> "kinozal"
+            "NNM-Club"  -> "nnmclub"
+            else        -> return pageUrl
         }
-        return result.magnetLink
+        // Извлекаем ID из URL
+        val id = pageUrl.substringAfterLast("t=").substringBefore("&").trim()
+            .ifBlank { pageUrl.substringAfterLast("/").substringBefore("?") }
+        if (id.isBlank()) return pageUrl
+
+        for (base in instances) {
+            try {
+                val url = "$base/api/torrent/info?id=$id&provider=$provider"
+                val json = get(url) ?: continue
+                val obj = JSONObject(json)
+                val magnet = obj.optString("Magnet").ifBlank { obj.optString("magnet") }
+                if (magnet.isNotBlank() && magnet.startsWith("magnet:")) return magnet
+            } catch (e: Exception) { continue }
+        }
+        return pageUrl
     }
 
     private fun get(url: String): String? = try {
-        val req = Request.Builder().url(url)
-            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0 Safari/537.36")
-            .header("Accept", "application/json, text/plain, */*")
-            .header("Accept-Language", "ru-RU,ru;q=0.9,en;q=0.8")
-            .header("Referer", "https://torapi.vercel.app/docs")
-            .header("Origin", "https://torapi.vercel.app")
-            .build()
-        client.newCall(req).execute().use { resp ->
+        client.newCall(
+            Request.Builder().url(url)
+                .header("User-Agent", "TorrentMusicPlayer/1.0")
+                .header("Accept", "application/json")
+                .build()
+        ).execute().use { resp ->
             if (resp.isSuccessful) resp.body?.string()
             else { Log.w("TorAPI", "HTTP ${resp.code} for $url"); null }
         }
-    } catch (e: Exception) { Log.e("TorAPI", "GET: ${e.message}"); null }
-
-    private fun parseNum(s: String) = s.trim().toIntOrNull() ?: 0
+    } catch (e: Exception) {
+        Log.e("TorAPI", "GET failed: ${e.message}")
+        null
+    }
 
     private fun parseSize(s: String): Long {
         if (s.isBlank()) return 0
@@ -188,7 +194,7 @@ class TorApiProvider @Inject constructor(private val client: OkHttpClient) : Sea
         return when {
             s.contains("GB", true) || s.contains("ГБ", true) -> (n * 1_073_741_824).toLong()
             s.contains("MB", true) || s.contains("МБ", true) -> (n * 1_048_576).toLong()
-            s.contains("KB", true) || s.contains("КБ", true) -> (n * 1024).toLong()
+            s.contains("KB", true) || s.contains("КБ", true) -> (n * 1_024).toLong()
             else -> n.toLong()
         }
     }
