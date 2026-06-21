@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class SettingsState(
+    val torapiInstance: String = "",
     val enabledSources: Set<SearchSource> = SearchSource.entries.filter { it.meta.defaultEnabled }.toSet(),
     val credentials: Map<SearchSource, SourceCredentials> = emptyMap(),
     val connectedStatus: Map<SearchSource, Boolean> = emptyMap(),
@@ -36,6 +37,7 @@ class SettingsViewModel @Inject constructor(
     val state: StateFlow<SettingsState> = _state.asStateFlow()
 
     companion object {
+        val KEY_TORAPI_INSTANCE = stringPreferencesKey("torapi_instance")
         val KEY_ENABLED = stringSetPreferencesKey("enabled_sources")
         fun credKey(src: SearchSource, field: String) = stringPreferencesKey("cred_${src.name}_$field")
         fun connKey(src: SearchSource) = booleanPreferencesKey("conn_${src.name}")
@@ -67,6 +69,8 @@ class SettingsViewModel @Inject constructor(
                 isLoaded = true
             )}
             // Применяем кастомный TorAPI URL
+            val torapiUrl = prefs[KEY_TORAPI_INSTANCE] ?: ""
+            aggregator.torapi.customInstance = torapiUrl
             aggregator.enabledSources.clear()
             aggregator.enabledSources.addAll(enabled)
             applyCredentials(creds)
@@ -96,6 +100,8 @@ class SettingsViewModel @Inject constructor(
     fun toggleSource(source: SearchSource, on: Boolean) {
         _state.update { s ->
             val newSrc = if (on) s.enabledSources + source else s.enabledSources - source
+            val torapiUrl = prefs[KEY_TORAPI_INSTANCE] ?: ""
+            aggregator.torapi.customInstance = torapiUrl
             aggregator.enabledSources.clear()
             aggregator.enabledSources.addAll(newSrc)
             s.copy(enabledSources = newSrc)
@@ -141,12 +147,14 @@ class SettingsViewModel @Inject constructor(
             dataStore.edit { prefs ->
                 prefs[KEY_ENABLED] = s.enabledSources.map { it.name }.toSet()
                 // TorAPI URL сохраняется отдельно через updateTorapiUrl
+                prefs[KEY_TORAPI_INSTANCE] = s.torapiInstance
                 s.credentials.forEach { (src, creds) ->
                     prefs[credKey(src, "login")] = creds.login
                     prefs[credKey(src, "pass")]  = creds.password
                     prefs[credKey(src, "token")] = creds.token
                 }
             }
+            aggregator.torapi.customInstance = s.torapiInstance
             applyCredentials(s.credentials)
             _state.update { it.copy(saveMessage = "Saved ${s.enabledSources.size} sources") }
         }
