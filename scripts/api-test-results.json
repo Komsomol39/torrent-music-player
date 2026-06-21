@@ -1,0 +1,70 @@
+{
+  "TPB (apibay.org)": {
+    "ok": true,
+    "count": 1,
+    "sample_name": "No results returned",
+    "sample_hash": "0000000000000000000000000000000000000000",
+    "sample_seeds": "0",
+    "magnet": "magnet:?xt=urn:btih:0000000000000000000000000000000000000000&dn=No%20results%20returned",
+    "ms": 270
+  },
+  "Nyaa RSS": {
+    "ok": true,
+    "count": 0,
+    "ms": 375
+  },
+  "RuTor": {
+    "ok": true,
+    "count": 1,
+    "sample_title": "Комиксы - Владислав Погадаев - Вселенная MOLOT HARDCORP. Паша Техник, ",
+    "sample_magnet": "magnet:?xt=urn:btih:b1a28e84e927b73eb6f9842272441b7ba4b5ef95&dn=rutor.info&tr=udp://opentor.net:6969",
+    "sample_seeds": "?",
+    "ms": 559
+  },
+  "1337x": {
+    "ok": false,
+    "error": "HTTP Error 403: Forbidden",
+    "ms": 28
+  },
+  "RuTracker (no login)": {
+    "ok": true,
+    "count": 0,
+    "redirected_to_login": true,
+    "ms": 818
+  },
+  "Jamendo": {
+    "ok": true,
+    "count": 0,
+    "headers": {
+      "status": "failed",
+      "code": 5,
+      "error_message": "Jamendo Api Invalid Client Id Error: Your credential is not authorized.",
+      "warnings": "",
+      "results_count": 0
+    },
+    "ms": 348
+  },
+  "FMA": {
+    "ok": false,
+    "error": "HTTP Error 404: Not Found",
+    "ms": 309
+  },
+  "Deezer": {
+    "ok": true,
+    "count": 5,
+    "sample_title": "Передай",
+    "sample_artist": "Avega",
+    "sample_preview": "https://cdnt-preview.dzcdn.net/api/1/1/d/0/d/0/d0dcd186a95968a30e03588b15d17c37.mp3?hdnea=exp=178208",
+    "duration_sec": 189,
+    "ms": 352
+  },
+  "SoundCloud": {
+    "ok": true,
+    "client_id": "iErh0hlIS7lC1NEeRzcimBG8NFFF045C",
+    "count": 5,
+    "sample_title": "Передай (feat. Паша Техник & Гради)",
+    "sample_user": "Avega",
+    "sample_stream_url": "https://api.soundcloud.com/tracks/620678988/stream?client_id=iErh0hlIS7lC1NEeRzcimBG8NFFF045C",
+    "ms": 971
+  }
+}
