@@ -100,8 +100,6 @@ class SettingsViewModel @Inject constructor(
     fun toggleSource(source: SearchSource, on: Boolean) {
         _state.update { s ->
             val newSrc = if (on) s.enabledSources + source else s.enabledSources - source
-            val torapiUrl = prefs[KEY_TORAPI_INSTANCE] ?: ""
-            aggregator.torapi.customInstance = torapiUrl
             aggregator.enabledSources.clear()
             aggregator.enabledSources.addAll(newSrc)
             s.copy(enabledSources = newSrc)
