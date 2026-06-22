@@ -12,8 +12,7 @@ import javax.inject.Singleton
 class SoundCloudProvider @Inject constructor(private val client: OkHttpClient) : SearchProvider {
     override val name = "SoundCloud"
 
-    // VERIFIED: clientId extracted from soundcloud.com JS bundle
-    // Fallback from test: iErh0hlIS7lC1NEeRzcimBG8NFFF045C
+    // VERIFIED: clientId from test = iErh0hlIS7lC1NEeRzcimBG8NFFF045C
     private val fallbackClientId = "iErh0hlIS7lC1NEeRzcimBG8NFFF045C"
     var clientId: String = fallbackClientId
 
@@ -32,7 +31,8 @@ class SoundCloudProvider @Inject constructor(private val client: OkHttpClient) :
 
     private fun searchWith(query: String, cid: String): List<TorrentResult> {
         val enc = java.net.URLEncoder.encode(query, "UTF-8")
-        val data = get("https://api-v2.soundcloud.com/search/tracks?q=$enc&limit=20&client_id=$cid") ?: return emptyList()
+        val data = get("https://api-v2.soundcloud.com/search/tracks?q=$enc&limit=20&client_id=$cid")
+            ?: return emptyList()
         return try {
             val items = JSONObject(data).getJSONArray("collection")
             (0 until items.length()).map { i ->
@@ -53,13 +53,16 @@ class SoundCloudProvider @Inject constructor(private val client: OkHttpClient) :
         } catch (e: Exception) { emptyList() }
     }
 
-    private fun extractClientId(): String? = try {
-        val html = get("https://soundcloud.com") ?: return null
-        val scriptUrl = Regex("""src="(https://a-v2\.sndcdn\.com/assets/[^"]+\.js)""")
-            .findAll(html).lastOrNull()?.groupValues?.get(1) ?: return null
-        val js = get(scriptUrl) ?: return null
-        Regex("""client_id:"([a-zA-Z0-9]+)"""").find(js)?.groupValues?.get(1)
-    } catch (e: Exception) { null }
+    // block body — fixes 'Returns are not allowed for functions with expression body'
+    private fun extractClientId(): String? {
+        return try {
+            val html = get("https://soundcloud.com") ?: return null
+            val scriptUrl = Regex("""src="(https://a-v2\.sndcdn\.com/assets/[^"]+\.js)""")
+                .findAll(html).lastOrNull()?.groupValues?.get(1) ?: return null
+            val js = get(scriptUrl) ?: return null
+            Regex("""client_id:"([a-zA-Z0-9]+)"""").find(js)?.groupValues?.get(1)
+        } catch (e: Exception) { null }
+    }
 
     private fun get(url: String): String? = try {
         client.newCall(Request.Builder().url(url)
