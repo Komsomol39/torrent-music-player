@@ -12,7 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.apia.musicplayer.data.torrent.TorrentState
+import com.apia.musicplayer.data.torrent.HttpDownloadStatus
 import com.apia.musicplayer.data.torrent.TorrentStatus
 import com.apia.musicplayer.ui.util.formatSize
 import com.apia.musicplayer.ui.util.formatSpeed
@@ -20,52 +20,41 @@ import com.apia.musicplayer.ui.util.formatSpeed
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TorrentDownloadsScreen(viewModel: TorrentViewModel = hiltViewModel()) {
-    val downloads by viewModel.downloads.collectAsState()
+    val torrentDownloads by viewModel.downloads.collectAsState()
+    val httpDownloads by viewModel.httpDownloads.collectAsState()
+
+    val totalActive = torrentDownloads.size + httpDownloads.values.count {
+        it.status == HttpDownloadStatus.DOWNLOADING
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Downloads") },
                 actions = {
-                    if (downloads.isNotEmpty()) {
-                        Text(
-                            "${downloads.size} torrent${if (downloads.size != 1) "s" else ""}",
+                    if (totalActive > 0) {
+                        Text("$totalActive active",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(end = 16.dp)
-                        )
+                            modifier = Modifier.padding(end = 16.dp))
                     }
                 }
             )
         }
     ) { padding ->
-        if (downloads.isEmpty()) {
+        if (torrentDownloads.isEmpty() && httpDownloads.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Icon(Icons.Default.Download, null,
                         modifier = Modifier.size(64.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("No active downloads", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Tap ⬇ on a torrent result in Find tab",
+                    Text("No downloads yet", style = MaterialTheme.typography.titleMedium)
+                    Text("Play a track from Find tab — it saves automatically",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = MaterialTheme.shapes.medium
-                    ) {
-                        Text(
-                            "▶ Stream results are saved automatically to Library",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.padding(12.dp)
-                        )
-                    }
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             return@Scaffold
@@ -76,13 +65,96 @@ fun TorrentDownloadsScreen(viewModel: TorrentViewModel = hiltViewModel()) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            items(downloads.values.toList(), key = { it.infoHash }) { torrent ->
-                TorrentCard(
-                    torrent  = torrent,
-                    onPause  = { viewModel.pause(it) },
-                    onResume = { viewModel.resume(it) },
-                    onRemove = { viewModel.remove(it) }
+            // HTTP загрузки (SoundCloud, Archive.org, Deezer и т.д.)
+            if (httpDownloads.isNotEmpty()) {
+                item {
+                    Text("Stream Downloads",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary)
+                }
+                items(httpDownloads.values.toList(), key = { it.id }) { dl ->
+                    HttpDownloadCard(dl)
+                }
+            }
+
+            // Торрент загрузки
+            if (torrentDownloads.isNotEmpty()) {
+                item {
+                    Text("Torrent Downloads",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary)
+                }
+                items(torrentDownloads.values.toList(), key = { it.infoHash }) { torrent ->
+                    TorrentCard(
+                        torrent  = torrent,
+                        onPause  = { viewModel.pause(it) },
+                        onResume = { viewModel.resume(it) },
+                        onRemove = { viewModel.remove(it) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun HttpDownloadCard(dl: com.apia.musicplayer.data.torrent.HttpDownload) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    when (dl.status) {
+                        HttpDownloadStatus.DOWNLOADING -> Icons.Default.Downloading
+                        HttpDownloadStatus.DONE        -> Icons.Default.CheckCircle
+                        HttpDownloadStatus.ERROR       -> Icons.Default.Error
+                    },
+                    null,
+                    tint = when (dl.status) {
+                        HttpDownloadStatus.DOWNLOADING -> MaterialTheme.colorScheme.primary
+                        HttpDownloadStatus.DONE        -> MaterialTheme.colorScheme.primary
+                        HttpDownloadStatus.ERROR       -> MaterialTheme.colorScheme.error
+                    },
+                    modifier = Modifier.size(24.dp)
                 )
+                Spacer(Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(dl.title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            when (dl.status) {
+                                HttpDownloadStatus.DOWNLOADING -> "Downloading..."
+                                HttpDownloadStatus.DONE        -> "Saved to library"
+                                HttpDownloadStatus.ERROR       -> "Error"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (dl.totalBytes > 0)
+                            Text(dl.totalBytes.formatSize(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            if (dl.status == HttpDownloadStatus.DOWNLOADING) {
+                Spacer(Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    progress = { dl.progress },
+                    modifier = Modifier.fillMaxWidth().height(4.dp)
+                )
+                Spacer(Modifier.height(2.dp))
+                Row(modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("${(dl.progress * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary)
+                    if (dl.totalBytes > 0)
+                        Text("${dl.bytesDownloaded.formatSize()} / ${dl.totalBytes.formatSize()}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
     }
@@ -90,17 +162,16 @@ fun TorrentDownloadsScreen(viewModel: TorrentViewModel = hiltViewModel()) {
 
 @Composable
 fun TorrentCard(
-    torrent: TorrentState,
+    torrent: com.apia.musicplayer.data.torrent.TorrentState,
     onPause: (String) -> Unit,
     onResume: (String) -> Unit,
     onRemove: (String) -> Unit
 ) {
     var confirmDelete by remember { mutableStateOf(false) }
-
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("Remove download?") },
+            title = { Text("Remove?") },
             text  = { Text(torrent.name.ifBlank { "This torrent" }) },
             confirmButton = {
                 TextButton(onClick = { onRemove(torrent.infoHash); confirmDelete = false }) {
@@ -112,32 +183,49 @@ fun TorrentCard(
             }
         )
     }
-
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(14.dp)) {
-            // Заголовок
             Row(verticalAlignment = Alignment.CenterVertically) {
-                StatusIcon(torrent.status)
+                val (icon, tint) = when (torrent.status) {
+                    TorrentStatus.DOWNLOADING -> Icons.Default.Downloading to MaterialTheme.colorScheme.primary
+                    TorrentStatus.SEEDING     -> Icons.Default.Upload      to MaterialTheme.colorScheme.secondary
+                    TorrentStatus.PAUSED      -> Icons.Default.PauseCircle to MaterialTheme.colorScheme.onSurfaceVariant
+                    TorrentStatus.FINISHED    -> Icons.Default.CheckCircle to MaterialTheme.colorScheme.primary
+                    TorrentStatus.ERROR       -> Icons.Default.Error       to MaterialTheme.colorScheme.error
+                    else                      -> Icons.Default.HourglassTop to MaterialTheme.colorScheme.onSurfaceVariant
+                }
+                Icon(icon, null, tint = tint, modifier = Modifier.size(24.dp))
                 Spacer(Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        torrent.name.ifBlank { "Fetching metadata…" },
-                        style = MaterialTheme.typography.bodyLarge,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis
-                    )
-                    StatusRow(torrent)
+                    Text(torrent.name.ifBlank { "Fetching metadata…" },
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(torrent.status.name.lowercase().replaceFirstChar { it.uppercase() },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (torrent.status == TorrentStatus.DOWNLOADING && torrent.downloadSpeed > 0)
+                            Text("↓ ${torrent.downloadSpeed.formatSpeed()}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary)
+                        if (torrent.seeders > 0)
+                            Text("S:${torrent.seeders}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                IconButton(onClick = { confirmDelete = true }, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.DeleteOutline, "Remove",
+                        tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
                 }
             }
-
-            // Прогресс
             if (torrent.status == TorrentStatus.DOWNLOADING || torrent.status == TorrentStatus.CHECKING) {
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
                 LinearProgressIndicator(
                     progress = { torrent.progress },
-                    modifier = Modifier.fillMaxWidth().height(6.dp)
-                )
-                Spacer(Modifier.height(4.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    modifier = Modifier.fillMaxWidth().height(4.dp))
+                Spacer(Modifier.height(2.dp))
+                Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
                     Text("${(torrent.progress * 100).toInt()}%",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary)
@@ -146,90 +234,27 @@ fun TorrentCard(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-            }
-
-            // Ошибка
-            torrent.error?.let { err ->
                 Spacer(Modifier.height(6.dp))
-                Surface(color = MaterialTheme.colorScheme.errorContainer, shape = MaterialTheme.shapes.small) {
-                    Text("⚠ $err", style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(8.dp, 4.dp))
+                Row(Modifier.fillMaxWidth(), Arrangement.End) {
+                    when (torrent.status) {
+                        TorrentStatus.DOWNLOADING ->
+                            OutlinedButton(onClick = { onPause(torrent.infoHash) },
+                                modifier = Modifier.height(30.dp)) {
+                                Icon(Icons.Default.Pause, null, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Pause", style = MaterialTheme.typography.labelSmall)
+                            }
+                        TorrentStatus.PAUSED ->
+                            Button(onClick = { onResume(torrent.infoHash) },
+                                modifier = Modifier.height(30.dp)) {
+                                Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Resume", style = MaterialTheme.typography.labelSmall)
+                            }
+                        else -> {}
+                    }
                 }
             }
-
-            Spacer(Modifier.height(8.dp))
-            HorizontalDivider(thickness = 0.5.dp)
-            Spacer(Modifier.height(4.dp))
-
-            // Кнопки
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                when (torrent.status) {
-                    TorrentStatus.DOWNLOADING ->
-                        OutlinedButton(onClick = { onPause(torrent.infoHash) }, modifier = Modifier.height(32.dp)) {
-                            Icon(Icons.Default.Pause, null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Pause", style = MaterialTheme.typography.labelMedium)
-                        }
-                    TorrentStatus.PAUSED ->
-                        Button(onClick = { onResume(torrent.infoHash) }, modifier = Modifier.height(32.dp)) {
-                            Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Resume", style = MaterialTheme.typography.labelMedium)
-                        }
-                    TorrentStatus.FINISHED ->
-                        FilledTonalButton(onClick = {}, modifier = Modifier.height(32.dp)) {
-                            Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Done", style = MaterialTheme.typography.labelMedium)
-                        }
-                    else -> {}
-                }
-                Spacer(Modifier.width(8.dp))
-                IconButton(onClick = { confirmDelete = true }, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Default.DeleteOutline, "Remove",
-                        tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun StatusIcon(status: TorrentStatus) {
-    val (icon, color) = when (status) {
-        TorrentStatus.DOWNLOADING -> Icons.Default.Downloading  to MaterialTheme.colorScheme.primary
-        TorrentStatus.SEEDING     -> Icons.Default.Upload       to MaterialTheme.colorScheme.secondary
-        TorrentStatus.PAUSED      -> Icons.Default.PauseCircle  to MaterialTheme.colorScheme.onSurfaceVariant
-        TorrentStatus.FINISHED    -> Icons.Default.CheckCircle  to MaterialTheme.colorScheme.primary
-        TorrentStatus.ERROR       -> Icons.Default.Error        to MaterialTheme.colorScheme.error
-        TorrentStatus.CHECKING    -> Icons.Default.Sync         to MaterialTheme.colorScheme.secondary
-        TorrentStatus.QUEUED      -> Icons.Default.HourglassTop to MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    Icon(icon, null, tint = color, modifier = Modifier.size(24.dp))
-}
-
-@Composable
-fun StatusRow(torrent: TorrentState) {
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
-            when (torrent.status) {
-                TorrentStatus.DOWNLOADING -> "Downloading"
-                TorrentStatus.SEEDING     -> "Seeding"
-                TorrentStatus.PAUSED      -> "Paused"
-                TorrentStatus.FINISHED    -> "Complete"
-                TorrentStatus.ERROR       -> "Error"
-                TorrentStatus.CHECKING    -> "Checking"
-                TorrentStatus.QUEUED      -> "Queued"
-            },
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        if (torrent.status == TorrentStatus.DOWNLOADING) {
-            if (torrent.downloadSpeed > 0)
-                Text("↓ ${torrent.downloadSpeed.formatSpeed()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-            if (torrent.seeders > 0)
-                Text("S:${torrent.seeders} P:${torrent.peers}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
