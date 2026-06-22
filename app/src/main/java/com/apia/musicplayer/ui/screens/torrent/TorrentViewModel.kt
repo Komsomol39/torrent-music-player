@@ -2,6 +2,7 @@ package com.apia.musicplayer.ui.screens.torrent
 
 import android.content.Context
 import android.content.Intent
+import android.media.MediaMetadataRetriever
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -9,6 +10,7 @@ import com.apia.musicplayer.data.db.TrackDao
 import com.apia.musicplayer.data.search.ArchiveOrgProvider
 import com.apia.musicplayer.data.search.SearchAggregator
 import com.apia.musicplayer.data.search.SourceResult
+import com.apia.musicplayer.data.torrent.HttpDownload
 import com.apia.musicplayer.data.torrent.StreamDownloader
 import com.apia.musicplayer.data.torrent.TorrentDownloadService
 import com.apia.musicplayer.data.torrent.TorrentEngine
@@ -19,8 +21,10 @@ import com.apia.musicplayer.domain.model.Track
 import com.apia.musicplayer.player.PlayerController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 data class SourceStatus(
@@ -60,7 +64,10 @@ class TorrentViewModel @Inject constructor(
     val showArchiveDialog = _showArchiveDialog.asStateFlow()
     private val _pendingResult = MutableStateFlow<TorrentResult?>(null)
 
+    // Торрент + HTTP загрузки
     val downloads: StateFlow<Map<String, TorrentState>> = engine.torrents
+    val httpDownloads: StateFlow<Map<String, HttpDownload>> = downloader.downloads
+
     val enabledSources get() = aggregator.enabledSources
 
     fun onQueryChange(q: String) { query.value = q }
@@ -70,23 +77,19 @@ class TorrentViewModel @Inject constructor(
         val q = query.value.trim()
         if (q.isBlank()) return
         val sources = aggregator.enabledSources.toSet()
-        if (sources.isEmpty()) { _toast.value = "Enable sources in Settings first"; return }
-
+        if (sources.isEmpty()) { _toast.value = "Enable sources in Settings"; return }
         viewModelScope.launch {
             _isLoading.value = true
             _results.value = emptyList()
             _sourceStatuses.value = sources.associateWith { SourceStatus(loading = true) }
-
             aggregator.searchAll(q, sources) { sr: SourceResult ->
                 if (sr.results.isNotEmpty()) {
                     _results.update { cur -> (cur + sr.results).sortedByDescending { it.seeders } }
                 }
                 _sourceStatuses.update { map ->
                     map + (sr.source to SourceStatus(
-                        loading = false,
-                        resultCount = sr.results.size,
-                        error = sr.error,
-                        durationMs = sr.durationMs
+                        loading = false, resultCount = sr.results.size,
+                        error = sr.error, durationMs = sr.durationMs
                     ))
                 }
             }
@@ -99,50 +102,22 @@ class TorrentViewModel @Inject constructor(
             _playingId.value = result.id
             try {
                 when {
-                    // Archive.org — identifier, резолвим до MP3
-                    result.source == "Archive.org" -> {
-                        val archiveProvider = aggregator.archive as? ArchiveOrgProvider
-                        val files = archiveProvider?.getFileList(result.magnetLink) ?: emptyList()
-                        when {
-                            files.isEmpty() -> {
-                                // Резолвим напрямую
-                                val url = archiveProvider?.getMagnet(result)
-                                if (!url.isNullOrBlank() && url.startsWith("http")) {
-                                    playAndSave(result, url)
-                                } else {
-                                    _toast.value = "No playable files found"
-                                }
-                            }
-                            files.size == 1 -> playAndSave(result.copy(title = files[0].name.substringBeforeLast(".")), files[0].url)
-                            else -> {
-                                _pendingResult.value = result
-                                _archiveFiles.value = files
-                                _showArchiveDialog.value = true
-                            }
-                        }
-                    }
-
-                    // Прямая HTTP ссылка (VK, SoundCloud, Deezer, FMA, Jamendo)
+                    result.source == "Archive.org" -> handleArchive(result)
                     result.magnetLink.startsWith("http") && !result.magnetLink.contains("magnet:?") ->
                         playAndSave(result, result.magnetLink)
-
-                    // Magnet или страница — резолвим
                     else -> {
                         val source = findSource(result)
                         val resolved = aggregator.getMagnet(result, source)
-                        Log.d("TorrentVM", "Resolved: ${resolved.take(80)}")
                         when {
                             resolved.startsWith("http") && !resolved.contains("magnet:?") ->
                                 playAndSave(result, resolved)
                             resolved.contains("magnet:") ->
                                 startTorrent(resolved, result.title)
-                            else ->
-                                _toast.value = "Cannot play: unsupported URL"
+                            else -> _toast.value = "Cannot play this result"
                         }
                     }
                 }
             } catch (e: Exception) {
-                Log.e("TorrentVM", "Error: ${e.message}")
                 _toast.value = "Error: ${e.message?.take(80)}"
             } finally {
                 _playingId.value = null
@@ -150,35 +125,68 @@ class TorrentViewModel @Inject constructor(
         }
     }
 
+    private suspend fun handleArchive(result: TorrentResult) {
+        val archive = aggregator.archive as? ArchiveOrgProvider ?: return
+        val files = archive.getFileList(result.magnetLink)
+        when {
+            files.isEmpty() -> {
+                val url = archive.getMagnet(result)
+                if (url.startsWith("http")) playAndSave(result, url)
+                else _toast.value = "No audio files found"
+            }
+            files.size == 1 ->
+                playAndSave(result.copy(title = files[0].name.substringBeforeLast(".")), files[0].url)
+            else -> {
+                _pendingResult.value = result
+                _archiveFiles.value = files
+                _showArchiveDialog.value = true
+            }
+        }
+    }
+
+    /** Играем сразу + параллельно скачиваем и сохраняем в библиотеку */
     private suspend fun playAndSave(result: TorrentResult, url: String) {
-        Log.d("TorrentVM", "Playing: $url")
+        Log.d("TorrentVM", "Play+Save: ${url.take(80)}")
+        // 1. Играем сразу
         player.playTrack(Track(
-            id = result.id,
-            title  = result.title,
+            id = result.id, title = result.title,
             artist = result.artist ?: result.source,
             album  = result.album  ?: result.source,
-            duration = 0L,
-            uri = url
+            duration = 0L, uri = url
         ))
         _toast.value = "▶ ${result.title.take(40)}"
 
-        // Скачиваем параллельно
+        // 2. Скачиваем параллельно
         val fileName = buildString {
             result.artist?.let { append(it); append(" - ") }
-            append(result.title.take(50))
+            append(result.title.take(60))
         }
         viewModelScope.launch {
             val file = downloader.downloadAsync(url, fileName)
-            if (file != null) {
+            if (file != null && file.exists()) {
+                // 3. Читаем реальную длительность из файла
+                val duration = withContext(Dispatchers.IO) {
+                    try {
+                        MediaMetadataRetriever().run {
+                            setDataSource(file.absolutePath)
+                            val d = extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                                ?.toLongOrNull() ?: 0L
+                            release()
+                            d
+                        }
+                    } catch (e: Exception) { 0L }
+                }
+                // 4. Сохраняем в БД с реальной длительностью
                 trackDao.upsertTrack(Track(
-                    id = "dl_${file.absolutePath.hashCode()}",
-                    title  = result.title,
-                    artist = result.artist ?: "Unknown",
-                    album  = result.album  ?: result.source,
-                    duration = 0L,
-                    uri = file.toURI().toString()
+                    id       = "dl_${file.absolutePath.hashCode()}",
+                    title    = result.title,
+                    artist   = result.artist ?: "Unknown",
+                    album    = result.album  ?: result.source,
+                    duration = duration,
+                    uri      = file.toURI().toString()
                 ))
                 _toast.value = "✓ Saved: ${file.name.take(40)}"
+                Log.d("TorrentVM", "Saved ${file.name}, duration=${duration}ms")
             }
         }
     }
@@ -214,7 +222,7 @@ class TorrentViewModel @Inject constructor(
             result.source.contains(it.name, ignoreCase = true)
         } ?: SearchSource.TPB
 
-    fun pause(infoHash: String)  = context.startService(Intent(context, TorrentDownloadService::class.java).apply { action = TorrentDownloadService.ACTION_PAUSE;  putExtra(TorrentDownloadService.EXTRA_HASH, infoHash) })
-    fun resume(infoHash: String) = context.startService(Intent(context, TorrentDownloadService::class.java).apply { action = TorrentDownloadService.ACTION_RESUME; putExtra(TorrentDownloadService.EXTRA_HASH, infoHash) })
-    fun remove(infoHash: String) = context.startService(Intent(context, TorrentDownloadService::class.java).apply { action = TorrentDownloadService.ACTION_REMOVE; putExtra(TorrentDownloadService.EXTRA_HASH, infoHash) })
+    fun pause(h: String)  = context.startService(Intent(context, TorrentDownloadService::class.java).apply { action = TorrentDownloadService.ACTION_PAUSE;  putExtra(TorrentDownloadService.EXTRA_HASH, h) })
+    fun resume(h: String) = context.startService(Intent(context, TorrentDownloadService::class.java).apply { action = TorrentDownloadService.ACTION_RESUME; putExtra(TorrentDownloadService.EXTRA_HASH, h) })
+    fun remove(h: String) = context.startService(Intent(context, TorrentDownloadService::class.java).apply { action = TorrentDownloadService.ACTION_REMOVE; putExtra(TorrentDownloadService.EXTRA_HASH, h) })
 }
