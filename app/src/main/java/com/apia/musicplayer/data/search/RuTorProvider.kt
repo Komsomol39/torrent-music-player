@@ -12,16 +12,16 @@ import javax.inject.Singleton
 class RuTorProvider @Inject constructor(private val client: OkHttpClient) : SearchProvider {
     override val name = "RuTor"
 
-    // VERIFIED HTML structure (2025):
-    // <tr class='gai'/'tum'>
+    // CONFIRMED HTML (2025):
+    // <tr class='gai'> or <tr class='tum'>
     //   <td>DATE</td>
-    //   <td colspan=2>
+    //   <td colspan = "2">  <- colspan с пробелами!
     //     <a href='//d.rutor.info/download/ID'>D</a>
-    //     <a href='magnet:?xt=...'>M</a>
-    //     <a href='/torrent/ID/slug'>TITLE</a>
+    //     <a href='magnet:?xt=...&dn=rutor.info&tr=...'>M</a>
+    //     <a href='/torrent/ID/slug'>TITLE TEXT</a>
     //   </td>
-    //   <td>SIZE</td>
-    //   <td><span class='green'>...&nbsp;SEEDS</span>...<span class='red'>&nbsp;LEECH</span></td>
+    //   <td>SIZE MB</td>
+    //   <td><span class='green'>&nbsp;N</span>...<span class='red'>&nbsp;N</span></td>
     // </tr>
 
     private val mirrors = listOf("https://rutor.info", "https://rutor.is")
@@ -45,26 +45,24 @@ class RuTorProvider @Inject constructor(private val client: OkHttpClient) : Sear
 
     private fun parse(html: String): List<TorrentResult> {
         val doc = Jsoup.parse(html)
-        // Таблица с результатами имеет id='index' или строки с классами gai/tum
+        // Ищем строки с классами gai или tum — это строки с результатами
         val rows = doc.select("tr.gai, tr.tum")
-        Log.d("RuTor", "Rows found: ${rows.size}")
+        Log.d("RuTor", "Rows: ${rows.size}")
         return rows.mapNotNull { row ->
-            val cells = row.select("td")
-            if (cells.size < 3) return@mapNotNull null
-            // td[1] содержит magnet и название
-            val contentCell = cells.getOrNull(1) ?: cells.getOrNull(0) ?: return@mapNotNull null
-            val magnet = contentCell.selectFirst("a[href^=magnet:]")?.attr("href")
+            // Ищем magnet в ЛЮБОМ месте строки (не привязываясь к индексу ячейки)
+            val magnet = row.selectFirst("a[href^=magnet:]")?.attr("href")
                 ?: return@mapNotNull null
-            val titleEl = contentCell.selectFirst("a[href^=/torrent/]")
-                ?: return@mapNotNull null
-            val title = titleEl.text().trim().ifBlank { return@mapNotNull null }
-            // Размер
-            val sizeText = cells.getOrNull(cells.size - 2)?.text() ?: ""
-            // Сиды — в span.green, текст типа '↑ 2' или просто '2'
-            val seedsText = row.selectFirst("span.green")?.text() ?: ""
-            val seeds = Regex("\\d+").findAll(seedsText).lastOrNull()?.value?.toIntOrNull() ?: 0
-            val leechText = row.selectFirst("span.red")?.text() ?: ""
-            val leech = Regex("\\d+").findAll(leechText).lastOrNull()?.value?.toIntOrNull() ?: 0
+            // Название — ссылка на /torrent/
+            val title = row.selectFirst("a[href^=/torrent/]")?.text()?.trim()
+                ?.ifBlank { null } ?: return@mapNotNull null
+            // Размер — предпоследняя ячейка с текстом содержащим GB/MB
+            val sizeText = row.select("td").map { it.text() }
+                .firstOrNull { it.contains("GB") || it.contains("MB") || it.contains("KB") } ?: ""
+            // Сиды — из span.green, берём последнее число
+            val seedsRaw = row.selectFirst("span.green")?.text() ?: ""
+            val seeds = Regex("\\d+").findAll(seedsRaw).lastOrNull()?.value?.toIntOrNull() ?: 0
+            val leechRaw = row.selectFirst("span.red")?.text() ?: ""
+            val leech = Regex("\\d+").findAll(leechRaw).lastOrNull()?.value?.toIntOrNull() ?: 0
             TorrentResult(
                 id = "rutor_${magnet.hashCode()}",
                 title = title,
@@ -75,7 +73,8 @@ class RuTorProvider @Inject constructor(private val client: OkHttpClient) : Sear
                 magnetLink = magnet,
                 source = "RuTor"
             )
-        }.sortedByDescending { it.seeders }
+        }.also { Log.d("RuTor", "Parsed ${it.size} results") }
+         .sortedByDescending { it.seeders }
     }
 
     private fun get(url: String): String? = try {
