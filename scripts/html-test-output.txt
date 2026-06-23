@@ -1,0 +1,77 @@
+=== RUTOR HTML SAMPLE ===
+<table id="news_table">
+  <tr><td colspan="2"><strong>Новости трекера</strong></td></tr><tr><td class="news_date">22-Апр</td>
+  	<td class="news_title"><a href="/torrent/472" target="_blank"  id="news89" onclick="$.cookie('news', '89', {expires: 365});">Новый Адрес: RUTOR.INFO и RUTOR.IS</a></td></tr><tr><td class="news_date
+  	<td class="news_title"><a href="/torrent/178905" target="_blank"  id="news86">Вечная блокировка в России</a></td></tr><tr><td class="news_date">09-Окт</td>
+  	<td class="news_title"><a href="/torrent/145012" target="_blank"  id="news59">Путеводитель по RUTOR.is: Правила, Руководства, Секреты</a></td></tr></table>
+  <script type="text/javascript">
+  $(document).ready(function(){if($.cookie("news")<89){$("#news89").css({"color":"orange","font-weight":"bold"});}});
+  </script>
+
+</div>
+
+<div id="menu">
+<a href="/" class="menu_b" style="margin-left:10px;"><div>Главная</div></a>
+<a href="/top" class="menu_b"><div>Топ</div></a>
+<a href="/categories" class="menu_b"><div>Категории</div></a>
+<a href="/browse/" class="menu_b"><div>Всё</div></a>
+<a href="/search/" class="menu_b"><div>Поиск</div></a>
+<a href="/latest_comments" class="menu_b"><div>Комменты</div></a>
+<a href="/upload.php" class="menu_b"><div>Залить</div></a>
+<a href="/jabber.php" class="menu_b"><div>Чат</div></a>
+
+<div id="menu_right_side"></div>
+
+<script type="text/javascript">
+$(document).ready(function()
+{
+	var menu_right;
+	if ($.cookie('userid') > 0)
+	{
+		menu_right = '<a href="/users.php?logout" class="logout" border="0"><img src="//cdnbunny.org/i/viti.gif" alt="logout" /></a><span class="logout"><a href="/profile.php" class="logout"  border="0"><im
+	}
+	else
+	{
+		menu_right = '<a href="/users.php" class="logout" border="0"><img src="//cdnbunny.org/i/zaiti.gif" alt="login" /></a>';
+	}
+	$("#menu_right_side").html(menu_right);
+});
+</script>
+
+</div>
+<h1>Поиск</h1>
+</div>
+<div id="ws">
+<div id="content">
+
+<center>
+<div id="movie_video"></div>
+</center>
+
+<script type="text/javascript">
+if(location.href.indexOf("rutor.is")!==-1 || location.href.indexOf("rutor.info")!==-1){
+if ($.cookie('redir_ipv6')===null) {
+$(document).ready(function(){$.ajax({url:"http://6tor.org/ping.php?proto=ipv6&"+Math.random()+"="+Math.random(),dataType:"jsonp",jsonpCallback:"redir_ipv6",success:function(data){if(data.status=="ok")
+$.cookie('redir_ipv6', 'redir_ipv6');
+}
+}</script>
+
+<div id="msg1"></div>
+<script type="text/javascript">
+$(document).ready(function()
+{
+
+=== MAGNET EXAMPLES ===
+MAGNET: magnet:?xt=urn:btih:1b5bf4fb39160f7b4f82484eb6fc346dc22c1ed5&dn=rutor.info&tr=udp://opentor.net:6969
+MAGNET: magnet:?xt=urn:btih:9952d5b44665b72c9e602a5a1548c22400d157ef&dn=rutor.info&tr=udp://opentor.net:6969
+MAGNET: magnet:?xt=urn:btih:49d60dc895f5b0ca523f58a3baeda1df56998fb6&dn=rutor.info&tr=udp://opentor.net:6969
+
+=== LINKS NEAR MAGNETS ===
+CONTEXT: ass="backgr"><td width="10px">Добавлен</td><td colspan="2">Название</td><td width="1px">Размер</td><td width="1px">Пиры</td></tr><tr class="gai"><td>22&nbsp;Ноя&nbsp;25</td><td colspan = "2"><a class="downgif" href="//d.rutor.info/download/1061843"><img src="//cdnbunny.org/i/d.gif" alt="D" /></a><a href="magnet:?xt=urn:btih:1b5bf4fb39160f7b4f82484eb6fc346dc22c1ed5&dn=rutor.info&tr=udp://opentor.ne
+---
+
+=== TITLE REGEX TESTS ===
+Pattern class="downgit"[^>]*>([^<]+)<: NOTHING
+Pattern href="/torrent/\d+/[^"]+">([^<]+)</a>: ['Алексей Губарев - Тайны предтеч. Древо Астарк 3, Вольный пилот (2025) MP3 ', 'Тайны Ниро Вульфа / A Nero Wolfe Mystery [S01-02] + Пилот (2001) DVDRip-AVC| P ', 'Пилотка / Пилот / Pilot / Pailleot (2024) WEB-DLRip-AVC от DoMiNo &amp; селезень | LE-Production ']
+Pattern <td[^>]*>\s*<a[^>]*href="/torrent/[^"]*": NOTHING
+Pattern title="([^"]+)": ['RSS']
