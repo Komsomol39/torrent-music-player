@@ -4,6 +4,7 @@ import android.util.Log
 import com.apia.musicplayer.domain.model.TorrentResult
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.jsoup.Jsoup
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -11,10 +12,18 @@ import javax.inject.Singleton
 class RuTorProvider @Inject constructor(private val client: OkHttpClient) : SearchProvider {
     override val name = "RuTor"
 
-    // VERIFIED by test: /search/0/0/000/0/<query>
-    // magnets in href="magnet:..."
-    // titles in href="/torrent/ID/slug">TITLE</a>
-    // seeds in class="s">N</td>
+    // VERIFIED HTML structure (2025):
+    // <tr class='gai'/'tum'>
+    //   <td>DATE</td>
+    //   <td colspan=2>
+    //     <a href='//d.rutor.info/download/ID'>D</a>
+    //     <a href='magnet:?xt=...'>M</a>
+    //     <a href='/torrent/ID/slug'>TITLE</a>
+    //   </td>
+    //   <td>SIZE</td>
+    //   <td><span class='green'>...&nbsp;SEEDS</span>...<span class='red'>&nbsp;LEECH</span></td>
+    // </tr>
+
     private val mirrors = listOf("https://rutor.info", "https://rutor.is")
 
     override suspend fun search(query: String): List<TorrentResult> {
@@ -35,26 +44,34 @@ class RuTorProvider @Inject constructor(private val client: OkHttpClient) : Sear
     }
 
     private fun parse(html: String): List<TorrentResult> {
-        val magnetRegex = Regex("""href="(magnet:[^"]+)"""")
-        val titleRegex  = Regex("""href="/torrent/\\d+/[^"]+">([^<]+)</a>"""")
-        val seedRegex   = Regex("""class="s">(\\d+)</td>"""")
-        val sizeRegex   = Regex("""class="ts">([^<]+)</td>"""")
-        val magnets = magnetRegex.findAll(html).map { it.groupValues[1] }.toList()
-        val titles  = titleRegex.findAll(html).map { it.groupValues[1].trim() }.toList()
-        val seeds   = seedRegex.findAll(html).map { it.groupValues[1] }.toList()
-        val sizes   = sizeRegex.findAll(html).map { it.groupValues[1].trim() }.toList()
-        Log.d("RuTor", "magnets=${magnets.size} titles=${titles.size} seeds=${seeds.size}")
-        return magnets.mapIndexed { i, magnet ->
-            val title = titles.getOrElse(i) { "Unknown" }
-            val seedCount = seeds.getOrElse(i) { "0" }.toIntOrNull() ?: 0
-            val sizeStr = sizes.getOrElse(i) { "" }
+        val doc = Jsoup.parse(html)
+        // Таблица с результатами имеет id='index' или строки с классами gai/tum
+        val rows = doc.select("tr.gai, tr.tum")
+        Log.d("RuTor", "Rows found: ${rows.size}")
+        return rows.mapNotNull { row ->
+            val cells = row.select("td")
+            if (cells.size < 3) return@mapNotNull null
+            // td[1] содержит magnet и название
+            val contentCell = cells.getOrNull(1) ?: cells.getOrNull(0) ?: return@mapNotNull null
+            val magnet = contentCell.selectFirst("a[href^=magnet:]")?.attr("href")
+                ?: return@mapNotNull null
+            val titleEl = contentCell.selectFirst("a[href^=/torrent/]")
+                ?: return@mapNotNull null
+            val title = titleEl.text().trim().ifBlank { return@mapNotNull null }
+            // Размер
+            val sizeText = cells.getOrNull(cells.size - 2)?.text() ?: ""
+            // Сиды — в span.green, текст типа '↑ 2' или просто '2'
+            val seedsText = row.selectFirst("span.green")?.text() ?: ""
+            val seeds = Regex("\\d+").findAll(seedsText).lastOrNull()?.value?.toIntOrNull() ?: 0
+            val leechText = row.selectFirst("span.red")?.text() ?: ""
+            val leech = Regex("\\d+").findAll(leechText).lastOrNull()?.value?.toIntOrNull() ?: 0
             TorrentResult(
                 id = "rutor_${magnet.hashCode()}",
                 title = title,
                 artist = title.substringBefore(" - ").trim().takeIf { title.contains(" - ") },
                 album = null, year = null,
-                seeders = seedCount, leechers = 0,
-                sizeBytes = parseSize(sizeStr),
+                seeders = seeds, leechers = leech,
+                sizeBytes = parseSize(sizeText),
                 magnetLink = magnet,
                 source = "RuTor"
             )
@@ -71,9 +88,9 @@ class RuTorProvider @Inject constructor(private val client: OkHttpClient) : Sear
     private fun parseSize(s: String): Long {
         val n = Regex("[0-9.]+").find(s)?.value?.toDoubleOrNull() ?: return 0
         return when {
-            s.contains("GB") -> (n * 1_073_741_824).toLong()
-            s.contains("MB") -> (n * 1_048_576).toLong()
-            s.contains("KB") -> (n * 1024).toLong()
+            s.contains("GB") || s.contains("ГБ") -> (n * 1_073_741_824).toLong()
+            s.contains("MB") || s.contains("МБ") -> (n * 1_048_576).toLong()
+            s.contains("KB") || s.contains("КБ") -> (n * 1024).toLong()
             else -> 0
         }
     }
