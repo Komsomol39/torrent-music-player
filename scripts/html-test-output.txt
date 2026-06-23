@@ -1,77 +1,8 @@
-=== RUTOR HTML SAMPLE ===
-<table id="news_table">
-  <tr><td colspan="2"><strong>Новости трекера</strong></td></tr><tr><td class="news_date">22-Апр</td>
-  	<td class="news_title"><a href="/torrent/472" target="_blank"  id="news89" onclick="$.cookie('news', '89', {expires: 365});">Новый Адрес: RUTOR.INFO и RUTOR.IS</a></td></tr><tr><td class="news_date
-  	<td class="news_title"><a href="/torrent/178905" target="_blank"  id="news86">Вечная блокировка в России</a></td></tr><tr><td class="news_date">09-Окт</td>
-  	<td class="news_title"><a href="/torrent/145012" target="_blank"  id="news59">Путеводитель по RUTOR.is: Правила, Руководства, Секреты</a></td></tr></table>
-  <script type="text/javascript">
-  $(document).ready(function(){if($.cookie("news")<89){$("#news89").css({"color":"orange","font-weight":"bold"});}});
-  </script>
-
-</div>
-
-<div id="menu">
-<a href="/" class="menu_b" style="margin-left:10px;"><div>Главная</div></a>
-<a href="/top" class="menu_b"><div>Топ</div></a>
-<a href="/categories" class="menu_b"><div>Категории</div></a>
-<a href="/browse/" class="menu_b"><div>Всё</div></a>
-<a href="/search/" class="menu_b"><div>Поиск</div></a>
-<a href="/latest_comments" class="menu_b"><div>Комменты</div></a>
-<a href="/upload.php" class="menu_b"><div>Залить</div></a>
-<a href="/jabber.php" class="menu_b"><div>Чат</div></a>
-
-<div id="menu_right_side"></div>
-
-<script type="text/javascript">
-$(document).ready(function()
-{
-	var menu_right;
-	if ($.cookie('userid') > 0)
-	{
-		menu_right = '<a href="/users.php?logout" class="logout" border="0"><img src="//cdnbunny.org/i/viti.gif" alt="logout" /></a><span class="logout"><a href="/profile.php" class="logout"  border="0"><im
-	}
-	else
-	{
-		menu_right = '<a href="/users.php" class="logout" border="0"><img src="//cdnbunny.org/i/zaiti.gif" alt="login" /></a>';
-	}
-	$("#menu_right_side").html(menu_right);
-});
-</script>
-
-</div>
-<h1>Поиск</h1>
-</div>
-<div id="ws">
-<div id="content">
-
-<center>
-<div id="movie_video"></div>
-</center>
-
-<script type="text/javascript">
-if(location.href.indexOf("rutor.is")!==-1 || location.href.indexOf("rutor.info")!==-1){
-if ($.cookie('redir_ipv6')===null) {
-$(document).ready(function(){$.ajax({url:"http://6tor.org/ping.php?proto=ipv6&"+Math.random()+"="+Math.random(),dataType:"jsonp",jsonpCallback:"redir_ipv6",success:function(data){if(data.status=="ok")
-$.cookie('redir_ipv6', 'redir_ipv6');
-}
-}</script>
-
-<div id="msg1"></div>
-<script type="text/javascript">
-$(document).ready(function()
-{
-
-=== MAGNET EXAMPLES ===
-MAGNET: magnet:?xt=urn:btih:1b5bf4fb39160f7b4f82484eb6fc346dc22c1ed5&dn=rutor.info&tr=udp://opentor.net:6969
-MAGNET: magnet:?xt=urn:btih:9952d5b44665b72c9e602a5a1548c22400d157ef&dn=rutor.info&tr=udp://opentor.net:6969
-MAGNET: magnet:?xt=urn:btih:49d60dc895f5b0ca523f58a3baeda1df56998fb6&dn=rutor.info&tr=udp://opentor.net:6969
-
-=== LINKS NEAR MAGNETS ===
-CONTEXT: ass="backgr"><td width="10px">Добавлен</td><td colspan="2">Название</td><td width="1px">Размер</td><td width="1px">Пиры</td></tr><tr class="gai"><td>22&nbsp;Ноя&nbsp;25</td><td colspan = "2"><a class="downgif" href="//d.rutor.info/download/1061843"><img src="//cdnbunny.org/i/d.gif" alt="D" /></a><a href="magnet:?xt=urn:btih:1b5bf4fb39160f7b4f82484eb6fc346dc22c1ed5&dn=rutor.info&tr=udp://opentor.ne
----
-
-=== TITLE REGEX TESTS ===
-Pattern class="downgit"[^>]*>([^<]+)<: NOTHING
-Pattern href="/torrent/\d+/[^"]+">([^<]+)</a>: ['Алексей Губарев - Тайны предтеч. Древо Астарк 3, Вольный пилот (2025) MP3 ', 'Тайны Ниро Вульфа / A Nero Wolfe Mystery [S01-02] + Пилот (2001) DVDRip-AVC| P ', 'Пилотка / Пилот / Pilot / Pailleot (2024) WEB-DLRip-AVC от DoMiNo &amp; селезень | LE-Production ']
-Pattern <td[^>]*>\s*<a[^>]*href="/torrent/[^"]*": NOTHING
-Pattern title="([^"]+)": ['RSS']
+TABLE FOUND at 6914
+id="index"><b>Страницы:  1 <a href="/search/1/0/000/0/пилот">2</a></b> Результатов поиска 115 (max. 2000)<table width="100%"><tr class="backgr"><td width="10px">Добавлен</td><td colspan="2">Название</td><td width="1px">Размер</td><td width="1px">Пиры</td></tr><tr class="gai"><td>22&nbsp;Ноя&nbsp;25</td><td colspan = "2"><a class="downgif" href="//d.rutor.info/download/1061843"><img src="//cdnbunny.org/i/d.gif" alt="D" /></a><a href="magnet:?xt=urn:btih:1b5bf4fb39160f7b4f82484eb6fc346dc22c1ed5&dn=rutor.info&tr=udp://opentor.net:6969&tr=http://retracker.local/announce"><img src="//cdnbunny.org/i/m.png" alt="M" /></a>
+<a href="/torrent/1061843/aleksej-gubarev-tajny-predtech-drevo-astark-3-volnyj-pilot-2025-mp3">Алексей Губарев - Тайны предтеч. Древо Астарк 3, Вольный пилот (2025) MP3 </a></td> 
+<td align="right">275.59&nbsp;MB</td><td align="center"><span class="green"><img src="//cdnbunny.org/t/arrowup.gif" alt="S" />&nbsp;2</span>&nbsp;<img src="//cdnbunny.org/t/arrowdown.gif" alt="L" /><span class="red">&nbsp;0</span></td></tr><tr class="tum"><td>01&nbsp;Апр&nbsp;25</td><td ><a class="downgif" href="//d.rutor.info/download/1031776"><img src="//cdnbunny.org/i/d.gif" alt="D" /></a><a href="magnet:?xt=urn:btih:9952d5b44665b72c9e602a5a1548c22400d157ef&dn=rutor.info&tr=udp://opentor.net:6969&tr=http://retracker.local/announce"><img src="//cdnbunny.org/i/m.png" alt="M" /></a>
+<a href="/torrent/1031776/tajny-niro-vulfa_a-nero-wolfe-mystery-s01-02-pilot-2001-dvdrip-avc|-p">Тайны Ниро Вульфа / A Nero Wolfe Mystery [S01-02] + Пилот (2001) DVDRip-AVC| P </a></td> <td align="right">2<img src="//cdnbunny.org/i/com.gif" alt="C" /></td>
+<td align="right">20.56&nbsp;GB</td><td align="center"><span class="green"><img src="//cdnbunny.org/t/arrowup.gif" alt="S" />&nbsp;3</span>&nbsp;<img src="//cdnbunny.org/t/arrowdown.gif" alt="L" /><span class="red">&nbsp;1</span></td></tr><tr class="gai"><td>23&nbsp;Ноя&nbsp;24</td><td ><a class="downgif" href="//d.rutor.info/download/1012562"><img src="//cdnbunny.org/i/d.gif" alt="D" /></a><a href="magnet:?xt=urn:btih:49d60dc895f5b0ca523f58a3baeda1df56998fb6&dn=rutor.info&tr=udp://opentor.net:6969&tr=http://retracker.local/announce"><img src="//cdnbunny.org/i/m.png" alt="M" /></a>
+<a href="/torrent/1012562/pilotka_pilot_pilot_pailleot-2024-web-dlrip-avc-ot-domino-selezen-le-production">Пилотка / Пилот / Pilot / Pailleot (2024) WEB-DLRip-AVC от DoMiNo &amp; селезень | LE-Production </a></td> <td align="right">4<img src="//cdnbunny.org/i/com.gif" alt="C" /></td>
+<td align="right">1.61&nbsp;GB</td><td align="center"><span class="green"><img src="//cdnbunny.org/t/arrowup.gif" alt="S" />&nbsp;0</span>&nbsp;<img src="//cdnbunny.org/t/arrowdown.gif" alt="L" /><span class="red">&nbsp;1</span></td></tr><tr class="tum"><td>23&nbsp;Ноя&nbsp;24</td><td ><a class="downgif" href="//d.rutor.info/download/1012511"><img src="//cdnbunny.org/i/d.gif" alt="D" /></a><a href="magnet:?xt=urn:btih:aaadb694608b397d6e1222f535c09386de6ae21f&dn=rutor.info
