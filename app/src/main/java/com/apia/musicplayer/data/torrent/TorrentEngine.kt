@@ -122,7 +122,16 @@ class TorrentEngine @Inject constructor(
 
     /** Добавить magnet с сохранением имени из поисковика */
     fun addMagnet(magnetUri: String, displayName: String = ""): String {
-        sessionManager.download(magnetUri, downloadDir)
+        // SessionManager.download(String, File) — принимает magnet URI напрямую
+        // В libtorrent4j это реализовано через async_add_torrent с параметром magnet
+        // Добавляем magnet через swig — единственный надёжный способ
+        try {
+            val params = org.libtorrent4j.swig.add_torrent_params.parse_magnet_uri(magnetUri)
+            params.save_path(downloadDir.absolutePath)
+            sessionManager.swig().async_add_torrent(params)
+        } catch (e: Exception) {
+            android.util.Log.e("TorrentEngine", "addMagnet: ${e.message}")
+        }
         val hash = magnetUri
             .substringAfter("xt=urn:btih:", "")
             .substringBefore("&")
