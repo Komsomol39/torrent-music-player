@@ -1,3 +1,4 @@
-67:> Task :app:compileDebugKotlin FAILED
-68:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:200:44 Type mismatch: inferred type is String but sha1_hash! was expected
-83:BUILD FAILED in 3m 30s
+68:> Task :app:compileDebugKotlin FAILED
+69:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:200:24 Unresolved reference: handles
+70:e: file:///home/runner/work/torrent-music-player/torrent-music-player/app/src/main/java/com/apia/musicplayer/data/torrent/TorrentEngine.kt:200:48 Unresolved reference: it
+85:BUILD FAILED in 3m 23s
