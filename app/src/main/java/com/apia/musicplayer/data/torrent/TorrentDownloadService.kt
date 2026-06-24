@@ -30,7 +30,8 @@ class TorrentDownloadService : Service() {
         when (intent?.action) {
             ACTION_ADD_MAGNET -> {
                 val magnet = intent.getStringExtra(EXTRA_MAGNET) ?: return START_NOT_STICKY
-                engine.addMagnet(magnet)
+                val name = intent.getStringExtra(EXTRA_NAME) ?: ""
+                engine.addMagnet(magnet, name)
             }
             ACTION_PAUSE -> {
                 val hash = intent.getStringExtra(EXTRA_HASH) ?: return START_NOT_STICKY
