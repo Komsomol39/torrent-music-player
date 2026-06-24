@@ -47,7 +47,7 @@ enum class SearchSource {
     ARCHIVE;   // Нет прямого скачивания — выключен по умолчанию
 
     val meta: SourceMeta get() = when (this) {
-        TORAPI     -> SourceMeta("RU Torrents",  SourceCategory.RU,    "🇷🇺", "RuTracker+RuTor+Kinozal+NNM без логина через TorAPI", "FLAC / MP3 320", AuthType.NONE, defaultEnabled = true)
+        TORAPI     -> SourceMeta("RU Torrents",  SourceCategory.RU,    "🇷🇺", "RuTracker+RuTor+Kinozal+NNM через TorAPI (нужен свой инстанс)", "FLAC / MP3 320", AuthType.OPTIONAL_TOKEN)
         RUTOR      -> SourceMeta("RuTor",        SourceCategory.RU,    "🎵", "Прямой доступ, без регистрации", "Mixed", AuthType.NONE, defaultEnabled = true)
         RUTRACKER  -> SourceMeta("RuTracker",    SourceCategory.RU,    "🎸", "Прямой, требует логин+VPN", "FLAC / MP3 320", AuthType.LOGIN_PASS)
         KINOZAL    -> SourceMeta("Kinozal",      SourceCategory.RU,    "💿", "Высокое качество, требует логин", "FLAC", AuthType.LOGIN_PASS)
