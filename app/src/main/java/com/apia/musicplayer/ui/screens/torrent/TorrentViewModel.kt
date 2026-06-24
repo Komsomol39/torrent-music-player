@@ -210,6 +210,7 @@ class TorrentViewModel @Inject constructor(
             Intent(context, TorrentDownloadService::class.java).apply {
                 action = TorrentDownloadService.ACTION_ADD_MAGNET
                 putExtra(TorrentDownloadService.EXTRA_MAGNET, magnet)
+                putExtra(TorrentDownloadService.EXTRA_NAME, name)
             }
         )
         _toast.value = "⬇ Download started: ${name.take(40)}"
