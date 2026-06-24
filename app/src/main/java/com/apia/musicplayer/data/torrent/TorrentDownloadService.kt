@@ -115,5 +115,6 @@ class TorrentDownloadService : Service() {
         const val ACTION_REMOVE     = "com.apia.musicplayer.REMOVE"
         const val EXTRA_MAGNET      = "magnet"
         const val EXTRA_HASH        = "hash"
+        const val EXTRA_NAME        = "name"
     }
 }
