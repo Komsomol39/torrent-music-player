@@ -1,6 +1,7 @@
 package com.apia.musicplayer.data.torrent
 
 import android.content.Context
+import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -8,7 +9,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import org.libtorrent4j.*
 import org.libtorrent4j.alerts.*
-import org.libtorrent4j.AddTorrentParams
 import org.libtorrent4j.swig.settings_pack
 import java.io.File
 import javax.inject.Inject
@@ -16,7 +16,7 @@ import javax.inject.Singleton
 
 data class TorrentState(
     val infoHash: String,
-    val name: String,
+    val name: String,           // Название из поискового результата или metadata
     val progress: Float = 0f,
     val downloadSpeed: Long = 0L,
     val uploadSpeed: Long = 0L,
@@ -40,8 +40,10 @@ class TorrentEngine @Inject constructor(
     private val _torrents = MutableStateFlow<Map<String, TorrentState>>(emptyMap())
     val torrents: StateFlow<Map<String, TorrentState>> = _torrents.asStateFlow()
 
+    // Сохраняем имена которые передал пользователь при добавлении
+    private val userNames = mutableMapOf<String, String>()
+
     val downloadDir: File = File(context.getExternalFilesDir(null), "Music").also { it.mkdirs() }
-    private val tmpDir: File = File(context.cacheDir, "torrent_tmp").also { it.mkdirs() }
 
     init {
         setupAlertListener()
@@ -55,7 +57,6 @@ class TorrentEngine @Inject constructor(
     private fun setupAlertListener() {
         sessionManager.addListener(object : AlertListener {
             override fun types(): IntArray? = null
-
             override fun alert(alert: Alert<*>) {
                 when (alert.type()) {
                     AlertType.ADD_TORRENT -> {
@@ -63,15 +64,16 @@ class TorrentEngine @Inject constructor(
                         val handle = a.handle()
                         handle.resume()
                         val hash = handle.infoHash().toHex()
+                        val savedName = userNames[hash] ?: "Loading…"
+                        val metaName = try { handle.status().name().ifBlank { null } } catch (e: Exception) { null }
                         _torrents.update { map ->
                             map + (hash to TorrentState(
                                 infoHash = hash,
-                                name = try { handle.status().name().ifBlank { "Loading..." } } catch (e: Exception) { "Loading..." },
+                                name = metaName ?: savedName,
                                 status = TorrentStatus.QUEUED
                             ))
                         }
                     }
-
                     AlertType.TORRENT_FINISHED -> {
                         val a = alert as TorrentFinishedAlert
                         val hash = a.handle().infoHash().toHex()
@@ -80,7 +82,6 @@ class TorrentEngine @Inject constructor(
                             map + (hash to cur.copy(status = TorrentStatus.FINISHED, progress = 1f))
                         }
                     }
-
                     AlertType.TORRENT_ERROR -> {
                         val a = alert as TorrentErrorAlert
                         val hash = a.handle().infoHash().toHex()
@@ -89,16 +90,18 @@ class TorrentEngine @Inject constructor(
                             map + (hash to cur.copy(status = TorrentStatus.ERROR, error = a.error().message))
                         }
                     }
-
                     AlertType.BLOCK_DOWNLOADING -> {
                         val a = alert as BlockDownloadingAlert
                         val handle = a.handle()
                         val hash = handle.infoHash().toHex()
                         try {
                             val st = handle.status()
+                            // Обновляем имя если metadata пришли
+                            val metaName = st.name().ifBlank { null }
                             _torrents.update { map ->
                                 val cur = map[hash] ?: return@update map
                                 map + (hash to cur.copy(
+                                    name = metaName ?: cur.name,
                                     progress = st.progress(),
                                     downloadSpeed = st.downloadPayloadRate().toLong(),
                                     uploadSpeed = st.uploadPayloadRate().toLong(),
@@ -111,61 +114,34 @@ class TorrentEngine @Inject constructor(
                             }
                         } catch (e: Exception) { /* ignore */ }
                     }
-
                     else -> {}
                 }
             }
         })
     }
 
-    /**
-     * Добавить magnet-ссылку.
-     * fetchMagnet получает метаданные (до 30 сек), затем начинает загрузку.
-     * Выполнять в IO dispatcher — блокирующий вызов.
-     */
-    fun addMagnet(magnetUri: String): String {
-        // fetchMagnet(magnet, timeoutSec, saveDir) → byte[] метаданных
-        val data = sessionManager.fetchMagnet(magnetUri, 30, tmpDir)
+    /** Добавить magnet с сохранением имени из поисковика */
+    fun addMagnet(magnetUri: String, displayName: String = ""): String {
+        sessionManager.download(magnetUri, downloadDir)
         val hash = magnetUri
             .substringAfter("xt=urn:btih:", "")
             .substringBefore("&")
             .lowercase()
             .ifBlank { magnetUri.hashCode().toString() }
-        return if (data != null) {
-            val ti = TorrentInfo.bdecode(data)
-            sessionManager.download(ti, downloadDir)
-            try { ti.infoHash().toHex() } catch (e: Exception) { hash }
-        } else {
-            // Fallback: добавляем через AddTorrentParams + swig API
-            val params = AddTorrentParams.parseMagnetUri(magnetUri)
-            params.setSavePath(downloadDir.absolutePath)
-            sessionManager.swig().async_add_torrent(params.swig())
-            hash
-        }
-    }
-
-    fun prioritizeAudioFiles(infoHash: String) {
-        val handle = findHandle(infoHash) ?: return
-        val info = handle.torrentFile() ?: return
-        val audioExts = setOf("mp3", "flac", "m4a", "ogg", "opus", "wav", "aac")
-        val priorities = Array(info.numFiles()) { Priority.IGNORE }
-        for (i in 0 until info.numFiles()) {
-            val name = info.files().fileName(i).lowercase()
-            if (audioExts.any { name.endsWith(".$it") }) {
-                priorities[i] = Priority.TWO
+        if (displayName.isNotBlank()) {
+            userNames[hash] = displayName
+            // Сразу создаём запись с именем чтобы UI показал его немедленно
+            _torrents.update { map ->
+                if (map.containsKey(hash)) map
+                else map + (hash to TorrentState(
+                    infoHash = hash,
+                    name = displayName,
+                    status = TorrentStatus.QUEUED
+                ))
             }
         }
-        handle.prioritizeFiles(priorities)
-    }
-
-    fun getAudioFiles(infoHash: String): List<File> {
-        val handle = findHandle(infoHash) ?: return emptyList()
-        val info = handle.torrentFile() ?: return emptyList()
-        val audioExts = setOf("mp3", "flac", "m4a", "ogg", "opus", "wav", "aac")
-        return (0 until info.numFiles())
-            .map { info.files().filePath(it) }
-            .filter { path -> audioExts.any { path.lowercase().endsWith(".$it") } }
-            .map { File(downloadDir, it) }
+        Log.d("TorrentEngine", "Added: $displayName ($hash)")
+        return hash
     }
 
     fun pause(infoHash: String) {
@@ -179,15 +155,15 @@ class TorrentEngine @Inject constructor(
     fun resume(infoHash: String) = findHandle(infoHash)?.resume()
 
     fun remove(infoHash: String) {
-        val handle = findHandle(infoHash) ?: return
-        sessionManager.remove(handle)
+        findHandle(infoHash)?.let { sessionManager.remove(it) }
+        userNames.remove(infoHash)
         _torrents.update { it - infoHash }
     }
 
     fun getTorrentState(infoHash: String): TorrentState? = _torrents.value[infoHash]
 
     private fun findHandle(infoHash: String): TorrentHandle? =
-        try { sessionManager.find(Sha1Hash.parseHex(infoHash)) } catch (e: Exception) { null }
+        try { sessionManager.find(Sha1Hash(infoHash)) } catch (e: Exception) { null }
 
     fun stop() = sessionManager.stop()
 }
