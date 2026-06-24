@@ -43,6 +43,8 @@ class TorrentEngine @Inject constructor(
     private val _torrents = MutableStateFlow<Map<String, TorrentState>>(emptyMap())
     val torrents: StateFlow<Map<String, TorrentState>> = _torrents.asStateFlow()
     private val userNames = mutableMapOf<String, String>()
+    // Держим handles сами — sessionManager.handles() не существует в libtorrent4j
+    private val handleMap = mutableMapOf<String, TorrentHandle>()
 
     val downloadDir: File = File(context.getExternalFilesDir(null), "Music").also { it.mkdirs() }
 
@@ -65,6 +67,7 @@ class TorrentEngine @Inject constructor(
                         val handle = a.handle()
                         handle.resume()
                         val hash = handle.infoHash().toHex()
+                        handleMap[hash] = handle
                         val savedName = userNames[hash]
                         val metaName = try { handle.status().name().ifBlank { null } } catch (e: Exception) { null }
                         _torrents.update { map ->
@@ -192,12 +195,12 @@ class TorrentEngine @Inject constructor(
 
     fun remove(infoHash: String) {
         findHandle(infoHash)?.let { sessionManager.remove(it) }
+        handleMap.remove(infoHash)
         userNames.remove(infoHash)
         _torrents.update { it - infoHash }
     }
 
-    private fun findHandle(infoHash: String): TorrentHandle? =
-        sessionManager.handles().firstOrNull { it.infoHash().toHex() == infoHash }
+    private fun findHandle(infoHash: String): TorrentHandle? = handleMap[infoHash]
 
     fun stop() = sessionManager.stop()
 }
