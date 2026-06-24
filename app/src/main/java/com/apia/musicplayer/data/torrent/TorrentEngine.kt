@@ -197,7 +197,7 @@ class TorrentEngine @Inject constructor(
     }
 
     private fun findHandle(infoHash: String): TorrentHandle? =
-        try { sessionManager.find(Sha1Hash(infoHash)) } catch (e: Exception) { null }
+        sessionManager.handles().firstOrNull { it.infoHash().toHex() == infoHash }
 
     fun stop() = sessionManager.stop()
 }
